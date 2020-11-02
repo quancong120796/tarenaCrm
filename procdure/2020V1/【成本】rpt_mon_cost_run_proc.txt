@@ -1,0 +1,655 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_cost_run_proc_2020( mdate date)
+AS
+/**
+  创建人：qc
+  创建时间：2020-05-11
+  用途：生成成本数据
+  修改时间:2020-05-12
+  修改内容：增加版本条件
+**/
+BEGIN
+
+--对于達內台北忠孝西路中心单独进行处理 (2020年1月1日以后的数据)
+/**
+  因调EHR接口中将中心code前边的0做了处理，导致这部分中心无法匹配id，
+  即crm中達內台北忠孝西路中心 的code为88602 ，而 rpt_mon_staff中存的值为88602，匹配不上导致月报中数据为空
+  以下为对该部分数据的处理
+*/
+
+update rpt_mon_staff t
+set center_code = '088602'
+where center_code = '88602' and create_time >= to_date('2020/01/01','yyyy/mm/dd') ;
+
+commit;
+
+--更新在岗员工冗余字段
+--rpt_mon_staff  数据来源于 PersionnelCountHandler 定时任务每天0点从EHR接口获取
+
+update rpt_mon_staff t
+set area_id = (select parent_id from mdm_center where code=center_code),
+    area_name = (select m.name from mdm_center m where id=(select c.parent_id from mdm_center c where c.code=t.center_code)),
+    city_id = (select city_id from mdm_center where code = center_code),
+    city_name = (select name from mdm_city m where m.id=(select city_id from mdm_center where code=t.center_code)),
+    center_id = (select id from mdm_center where code=center_code),
+    center_name = (select name from mdm_center where code=center_code),
+    center_type = (select work_type from mdm_center where code=center_code)
+where trunc(create_time)=case when trunc(mdate,'mm')=to_date('2019/8/1','yyyy/mm/dd')
+                                    then trunc(mdate)+2
+                                    else trunc(mdate)+1
+                                    end;
+
+commit;
+
+
+--更新在岗员工对应月报行
+
+update rpt_mon_staff t
+set rpt_row = (select KPI_ROW from RPT_MON_KPI_RULE_2020 r where r.kpi_code=t.code and r.center_type=t.center_type and r.rpt_type=2 and r.kpi_type=1 and r.remark='cost_staff_001'),
+    rpt_row_name = (select KPI_NAME from RPT_MON_KPI_RULE_2020 r where r.kpi_code=t.code and r.center_type=t.center_type and r.rpt_type=2 and r.kpi_type=1 and r.remark='cost_staff_001')
+where trunc(create_time)=case when trunc(mdate,'mm')=to_date('2019/8/1','yyyy/mm/dd')
+                                    then trunc(mdate)+2
+                                    else trunc(mdate)+1
+                                    end;
+
+commit;
+
+
+--**************************** 岗位***********************
+
+--岗位(员工数)
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+      select to_number(TO_CHAR(mdate, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(mdate, 'MM')) as rpt_month
+            ,area_id ,area_name ,city_id ,city_name ,center_id ,center_name ,center_type ,rpt_row ,rpt_row_name
+            ,count as rpt_value,code as rpt_row_code
+      from rpt_mon_staff f
+      where trunc(create_time)=case when trunc(mdate,'mm')=to_date('2019/8/1','yyyy/mm/dd')
+                                    then trunc(mdate)+2
+                                    else trunc(mdate)+1
+                                    end
+
+
+   )group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+);
+
+commit;
+
+
+--手动计算 项目经理\讲师\研发人员 员工数（渠道）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,109 as rpt_row, rpt_col,sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '项目经理\讲师\研发人员' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row in(110,111)
+
+group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 109,rpt_col;
+
+commit;
+
+
+
+--手动计算 职业发展 员工数（渠道）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,118 as rpt_row, rpt_col,sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '职业发展' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row in(119,120)
+
+group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 118,rpt_col;
+
+commit;
+
+
+
+--岗位（工资）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+           ,(select parent_id from mdm_center where id = f.center_id) as area_id
+            ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.center_id)) as area_name
+            ,(select city_id from mdm_center where id = f.center_id) as city_id
+            ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.center_id)) as city_name
+            ,center_id
+            ,(select name from mdm_center where id = f.center_id) as center_name
+            ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo01_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo01_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,SALARY as rpt_value,post_name as rpt_row_code
+       from cost_staff f
+       where type = 0 and f.relation_id in
+            (select id from cost_month where  cost_date>=trunc(MDATE,'mm') and  cost_date<trunc(MDATE)+1)
+
+       union all
+
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+             ,(select area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo01_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo01_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,0-SALARY as rpt_value,post_name as rpt_row_code
+      from cost_staff f
+      where type = 1 and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+      union all
+
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select in_area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select in_area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select in_city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select in_city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select in_center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select in_center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo01_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo01_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,SALARY as rpt_value,in_post_name as rpt_row_code
+      from cost_staff f
+      where type = 1  and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+   ) group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+);
+
+commit;
+
+
+--岗位(奖金)
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+           ,(select parent_id from mdm_center where id = f.center_id) as area_id
+            ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.center_id)) as area_name
+            ,(select city_id from mdm_center where id = f.center_id) as city_id
+            ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.center_id)) as city_name
+            ,center_id
+            ,(select name from mdm_center where id = f.center_id) as center_name
+            ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo02_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo02_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,BONUS as rpt_value,post_name as rpt_row_code
+       from cost_staff f
+       where type = 0 and f.relation_id in
+            (select id from cost_month where  cost_date>=trunc(MDATE,'mm') and  cost_date<trunc(MDATE)+1)
+
+       union all
+
+       select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo02_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo02_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,0-BONUS as rpt_value,post_name as rpt_row_code
+       from cost_staff f
+       where type = 1 and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+       union all
+
+      select to_number(TO_CHAR(mdate, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(mdate, 'MM')) as rpt_month
+            ,(SELECT IN_AREA_ID  FROM cost_divide WHERE ID=relation_id  and rownum=1) AS area_id
+            ,(SELECT IN_AREA_NAME  FROM cost_divide WHERE ID=relation_id  and rownum=1) AS area_name
+            ,(SELECT IN_city_id  FROM cost_divide WHERE ID=relation_id  and rownum=1) AS city_id
+            ,(select name from mdm_city where id=(SELECT IN_city_id  FROM cost_divide WHERE ID=relation_id  and rownum=1)) as city_name
+            ,(SELECT IN_CENTER_ID  FROM cost_divide WHERE ID=relation_id  and rownum=1) AS center_id
+            ,(SELECT IN_CENTER_NAME  FROM cost_divide WHERE ID=relation_id  and rownum=1) AS center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo02_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo02_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,BONUS as rpt_value,in_post_name as rpt_row_code
+       from cost_staff f
+       where type = 1 and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(mdate,'mm') and  APPROVE_TIME<trunc(mdate)+1)
+
+   ) group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+
+);
+commit;
+
+
+--岗位(社保公积)
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+           ,(select parent_id from mdm_center where id = f.center_id) as area_id
+            ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.center_id)) as area_name
+            ,(select city_id from mdm_center where id = f.center_id) as city_id
+            ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.center_id)) as city_name
+            ,center_id
+            ,(select name from mdm_center where id = f.center_id) as center_name
+            ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo03_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo03_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,WELFARE as rpt_value,post_name as rpt_row_code
+       from cost_staff f
+       where type = 0 and f.relation_id in
+            (select id from cost_month where  cost_date>=trunc(MDATE,'mm') and  cost_date<trunc(MDATE)+1)
+
+       union all
+
+       select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+             ,(select area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo03_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo03_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,0-WELFARE as rpt_value,post_name as rpt_row_code
+       from cost_staff f
+       where type = 1 and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+       union all
+
+       select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select in_area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select in_area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select in_city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select in_city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select in_center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select in_center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select to_number(t.vdo03_code) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row
+            ,case when in_post_name in ('16','17')
+                  then (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  else (select t.vdo03_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_post_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_staff_001')
+                  end as rpt_row_name
+            ,WELFARE as rpt_value,in_post_name as rpt_row_code
+       from cost_staff f
+       where type = 1 and f.relation_id in
+            (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+  ) group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+
+);
+commit;
+
+
+--**************************** 其它成本***********************
+--其它成本
+/**
+修改内容：去除单独的K12销售成本条件、都取自RPT_MON_KPI_RULE_2020表
+修改内容: 2020-07-01 月报其他成本中心取值由原来的关联月支出中心 调整为直接取值其他成本的中心(系统显示的实际业务中心)
+      调整原因：NC对接其他成本至crm时会存在月支出中心和其他成本实际业务中心不一致的情况
+**/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+      select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select parent_id from mdm_center where id = f.center_id) as area_id
+            ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.center_id)) as area_name
+            ,(select city_id from mdm_center where id = f.center_id) as city_id
+            ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.center_id)) as city_name
+            ,center_id
+            ,(select name from mdm_center where id = f.center_id) as center_name
+            ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id  and rownum=1) AS center_type
+            , (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=f.center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+            as rpt_row
+            ,(select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=f.center_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+            as rpt_row_name
+            ,value as  rpt_value,other_name as rpt_row_code
+        from cost_other f
+        where type = 0 and other_name != '60' and f.relation_id in
+                (select id from cost_month where  cost_date>=trunc(MDATE,'mm') and  cost_date<trunc(MDATE)+1)
+
+        union all
+
+        select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,case when other_name = '60'
+                  then (select to_number(VDO01_CODE) from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.center_id  and rownum=1) FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+                  else (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT (SELECT WORK_TYPE FROM MDM_CENTER WHERE ID=cd.center_id  and rownum=1) FROM cost_divide cd WHERE ID=relation_id and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+                  end as rpt_row
+            ,case when other_name = '60'
+                  then (select VDO01_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.center_id  and rownum=1) FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+                  else (select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=other_name and t.center_type=(SELECT (SELECT WORK_TYPE FROM MDM_CENTER WHERE ID=cd.center_id  and rownum=1) FROM cost_divide cd WHERE ID=relation_id and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+                  end as rpt_row_name
+            ,case when other_name = '60' then value else (0-value) end as  rpt_value
+            ,other_name as rpt_row_code
+        from cost_other f
+        where type = 1 and f.relation_id in
+              (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+        union all
+
+        select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select in_area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select in_area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select in_city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select in_city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select in_center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select in_center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            ,  (select KPI_ROW from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_other_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.in_center_id  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+              as rpt_row
+            ,(select KPI_name from RPT_MON_KPI_RULE_2020 t where t.kpi_code=in_other_name and t.center_type=(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.in_center_id  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1) and t.rpt_type=2 and t.kpi_type=1 and t.remark='cost_other_001')
+            as rpt_row_name
+            ,value as rpt_value,in_other_name as rpt_row_code
+        from cost_other f
+        where type = 1 and f.relation_id in
+              (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+      ) group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+
+);
+commit;
+
+--补贴金额subsidies
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       2 as rpt_type, rpt_row,5+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+  select  rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+          sum(nvl(rpt_value,0)) as rpt_value,rpt_row,rpt_row_code,rpt_row_name
+  from (
+
+        select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            , 226 as rpt_row
+            , '补贴' as rpt_row_name
+            --划出中心取补贴金额的负值
+      , (0-subsidies) as  rpt_value
+            ,null as rpt_row_code
+        from cost_other f
+        where type = 1 and subsidies is not null and subsidies !=0 and f.relation_id in
+              (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+        union all
+
+        select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+            ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+            ,(select in_area_id from cost_divide where id=f.relation_id) as area_id
+            ,(select in_area_name from cost_divide where id=f.relation_id) as area_name
+            ,(select in_city_id from cost_divide where id=f.relation_id) as city_id
+            ,(select name from mdm_city where id=(select in_city_id from cost_divide where id=f.relation_id)) as city_name
+            ,(select in_center_id from cost_divide where id=f.relation_id) as center_id
+            ,(select in_center_name from cost_divide where id=f.relation_id) as center_name
+            ,(SELECT (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=cd.IN_CENTER_ID  and rownum=1)   FROM cost_divide cd WHERE ID=relation_id  and rownum=1)AS center_type
+            , 226 as rpt_row
+            , '补贴' as rpt_row_name
+            --划入中心取补贴金额的值
+      ,subsidies as rpt_value,null as rpt_row_code
+        from cost_other f
+        where type = 1 and subsidies is not null and subsidies !=0 and f.relation_id in
+              (select id from cost_divide d where APPROVE_STATE = 11 and  APPROVE_TIME>=trunc(MDATE,'mm') and  APPROVE_TIME<trunc(MDATE)+1)
+
+      ) group by rpt_year,rpt_month,area_id,area_name,city_id, city_name,center_id,center_name,center_type,
+        rpt_row,rpt_row_code,rpt_row_name
+
+);
+commit;
+
+
+--删除成本童程座位数
+/**
+修改时间:2020-05-11
+修改内容：增加版本条件
+备注:这里删除是因为座位数和教室数由少儿收入中间表中提供
+*/
+
+delete rpt_mon_run
+where rpt_year = to_number(to_char(mdate,'yyyy'))
+and rpt_month = to_number(to_char(mdate,'MM'))
+and rpt_version = '2020V1'
+and center_type=3
+and rpt_row=(select kpi_row from RPT_MON_KPI_RULE_2020
+              where kpi_code='3002' and center_type=3 and remark='cost_other_001' and rpt_type=2);
+
+--删除成本童程教室数
+/**
+修改时间:2020-05-11
+修改内容：增加版本条件
+*/
+
+delete rpt_mon_run
+where rpt_year = to_number(to_char(mdate,'yyyy'))
+and rpt_month = to_number(to_char(mdate,'MM'))
+and rpt_version = '2020V1'
+and center_type=3
+and rpt_row=(select kpi_row from RPT_MON_KPI_RULE_2020
+              where kpi_code='3003' and center_type=3 and remark='cost_other_001' and rpt_type=2);
+
+commit;
+
+--中心数去除管理中心
+
+delete from  rpt_mon_run m
+where rpt_year = to_number(to_char(mdate ,'yyyy'))
+and rpt_month >= to_number(to_char(mdate ,'MM'))
+and rpt_version = '2020V1'
+and rpt_type=2
+--根据中心的中心类型判断 center_type = 5 为管理中心
+and (select center_type from mdm_center where id = m.center_id )= 5
+and rpt_row= (case when m.center_type = 1 then (select kpi_row from RPT_MON_KPI_RULE_2020 where kpi_code='1' and remark='cost_other_001' and rpt_type=2 and center_type = 1 and rownum = 1)
+           when m.center_type = 2 then (select kpi_row from RPT_MON_KPI_RULE_2020 where kpi_code='1' and remark='cost_other_001' and rpt_type=2 and center_type = 2 and rownum = 1)
+           when m.center_type = 3 then (select kpi_row from RPT_MON_KPI_RULE_2020 where kpi_code='1' and remark='cost_other_001' and rpt_type=2 and center_type = 3 and rownum = 1 ) end
+) ;
+
+commit;
+
+--调整2020年7月份部分中心在岗员工数
+if (to_number(TO_CHAR(mdate, 'yyyy'))=2020 and to_number(TO_CHAR(mdate, 'MM')) =7  ) then
+
+--达内成都童程童美锦华万达中心 K12助理讲师、讲师、研发人员 由7调整为8
+update rpt_mon_run set rpt_value = 8
+where rpt_year = 2020 and  rpt_month = 7 and rpt_version = '2020V1' and rpt_type = 2
+and rpt_row= (select kpi_row  from rpt_mon_kpi_rule_2020 where kpi_code = 13 and remark = 'cost_staff_001' and  rpt_type = 2 and center_type = 3 and rownum = 1)
+and center_id = 5113   and rpt_value = 7;
+
+--达内童程童美事业部 中心主任、行政、人事、信息专员、MIS 14-调整为31
+update rpt_mon_run set rpt_value = 31
+where  rpt_year = 2020  and rpt_month = 7 and rpt_version = '2020V1' and rpt_type = 2
+and rpt_row= (select kpi_row  from rpt_mon_kpi_rule_2020 where kpi_code = 11 and remark = 'cost_staff_001' and  rpt_type = 2 and center_type =3 and rownum = 1)
+and center_id = 2633 and  rpt_value = 14;
+
+---达内集团总部 财务  由378调整至379
+update rpt_mon_run set rpt_value = 379
+where  rpt_year = 2020  and rpt_month = 7 and rpt_version = '2020V1' and rpt_type = 2
+and rpt_row= (select kpi_row  from rpt_mon_kpi_rule_2020 where kpi_code = 12 and remark = 'cost_staff_001' and  rpt_type = 2 and center_type = 1 and rownum = 1)
+and center_id = 100 and  rpt_value = 378;
+--达内集团总部中心主任、行政、人事、信息专员、MIS 127 调整至132
+
+update rpt_mon_run set rpt_value = 131
+where  rpt_year = 2020  and rpt_month = 7 and rpt_version = '2020V1' and rpt_type = 2
+and rpt_row= (select kpi_row  from rpt_mon_kpi_rule_2020 where kpi_code = 11 and remark = 'cost_staff_001' and  rpt_type = 2 and center_type = 1 and rownum = 1)
+and center_id = 100  and rpt_value = 127;
+
+commit;
+end if;
+
+END ;

@@ -1,0 +1,216 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_guimo_run_proc(
+  MDATE IN DATE DEFAULT sysdate
+)
+AS
+
+
+
+
+BEGIN
+  delete from cost_other where type=0  and   other_name='3001'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+ --插入教学成本
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select  cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1  and rownum=1) as relation_id
+,'3001' as other_name
+,AREA   as value
+,'系统自动' as  source
+, '教学成本-面积' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+       from mdm_center mm where id not  in(
+  select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and other_name='3001' )  and nvl( AREA ,0)>0 and   state=1
+and id in( select center_id from cost_month where center_id =mm.id  and  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 );
+ commit;
+
+ delete from cost_other where type=0  and   other_name='3030'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+ --插入教学成本
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select  cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id
+
+  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1  and rownum=1) as relation_id
+,'3030' as other_name
+,LETTABLE_AREA   as value
+,'系统自动' as  source
+, '教学成本-租赁面积' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+       from mdm_center mm where id not  in(
+  select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and other_name='3030' )  and nvl( LETTABLE_AREA ,0)>0 and   state=1
+and id in( select center_id from cost_month where center_id =mm.id
+
+  and  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 );
+ commit;
+
+
+  delete from cost_other where type=0  and   other_name='3032'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+ --插入教学成本
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select  cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id
+
+  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1  and rownum=1) as relation_id
+,'3032' as other_name
+,TRANSFER_AREA   as value
+,'系统自动' as  source
+, '教学成本-出让面积' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+       from mdm_center mm where id not  in(
+  select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and other_name='3032' )  and nvl( TRANSFER_AREA ,0)>0 and   state=1
+and id in( select center_id from cost_month where center_id =mm.id
+
+  and  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 );
+ commit;
+
+  delete from cost_other where type=0  and   other_name='3031'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+ --插入教学成本
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select  cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id
+
+  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1  and rownum=1) as relation_id
+,'3031' as other_name
+,RECEIVE_AREA   as value
+,'系统自动' as  source
+, '教学成本-接收面积' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+       from mdm_center mm where id not  in(
+  select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and other_name='3031' )  and nvl( RECEIVE_AREA ,0)>0 and   state=1
+and id in( select center_id from cost_month where center_id =mm.id
+
+  and  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 );
+ commit;
+
+--教室数
+
+  delete from cost_other where type=0  and   other_name='3003'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1  and rownum=1) as relation_id
+,'3003' as other_name
+,(select count(1)     from ca_class_room  where state=1 and center_id=mm.id )   as value
+,'教室数' as  source
+, '教学成本-教室' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+  from mdm_center mm   where  state=1  and
+  id not in(   select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 )
+and other_name='3003')
+ and id in( select center_id from cost_month where center_id =mm.id  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and id in( select center_id    from ca_class_room  where state=1 ) ;
+ commit;
+--座位数
+
+  delete from cost_other where type=0  and   other_name='3002'
+   and  relation_id in
+    (select id from cost_month where   COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 ) ;
+    commit;
+
+insert into cost_other
+  (id, org_id, com_id, area_id, area_name, city_id, center_id, center_name, type, relation_id, other_name, value, source, remark, create_id, create_name, create_time, update_id, update_name, update_time)
+
+ select cost_other_seq.nextval as id ,
+  id as org_id ,
+ 1 as com_id ,PARENT_ID as area_id   ,
+ (select name from mdm_center  where id =mm.PARENT_ID) as area_name,
+ city_id, id as center_id ,name as  center_name,0 as type
+ ,(
+  select id from cost_month where center_id =mm.id  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 and rownum=1) as relation_id
+,'3002' as other_name
+,(select sum(nvl(GALLERYFUL,0) )   from ca_class_room  where state=1 and center_id=mm.id )   as value
+,'座位数' as  source
+, '教学成本-座位数' as remark
+,1
+       ,'admin',
+       sysdate,
+ 1
+       ,'admin',
+       sysdate
+  from mdm_center mm   where  state=1  and
+  id not in(   select center_id   from cost_other where type=0 and relation_id in (select id from cost_month where  COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1 )
+and other_name='3002')
+ and id in( select center_id from cost_month where center_id =mm.id  and COST_DATE>=trunc(MDATE,'mm') and COST_DATE<MDATE+1)
+and id in( select center_id    from ca_class_room  where state=1 ) ;
+
+ commit;
+
+
+END ;

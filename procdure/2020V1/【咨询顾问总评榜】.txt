@@ -1,0 +1,212 @@
+CREATE OR REPLACE PROCEDURE  RPT_consult_RANK_PROC_2020 (MDATE IN DATE DEFAULT SYSDATE ) AS
+BEGIN
+
+/**
+修改时间:2020-05-12
+修改内容:插入增加版本，删除增加版本条件
+*/
+
+-- 删除当月数据
+delete from rpt_sale_rank where report_date >= trunc(mdate,'mm') and report_date < add_months(trunc(mdate,'mm'),1) and rpt_version = '2020V1';
+commit;
+
+-- 插入当月的数据
+insert into rpt_sale_rank (id,
+own_id,own_name,report_date,stu_num,total_fee,cash_fee,discount_fee_xymx,pd_fee,pdfk_fee,repay_fee,std_pd_fee,std_pdfk_fee,std_txkj_fee,
+discount_fee_yh,add_fee,kj_fee,sale_total_fee,count_total_fee, email,create_time,rpt_version)
+
+-- 学员数，学费总值，现金收入，优惠
+select
+  rpt_sale_rank_seq.nextval as id,
+  OWN_ID,OWN_NAME,RPT_DATE,STU_NUM,TOTAL_FEE,CASH_FEE,DISCOUNT_FEE_XYMX,PD_FEE,PDFK_FEE,REPAY_FEE,STD_PD_FEE,STD_PDFK_FEE
+  ,STD_TXKJ_FEE,DISCOUNT_FEE_YH,ADD_FEE,KJ_FEE,SALE_TOTAL_FEE,COUNT_TOTAL_FEE, OWN_CODE,sysdate,'2020V1' as rpt_version
+
+   from (
+    select own_id,OWN_CODE,own_name,to_date(to_char(rpt_date,'yyyy-mm'),'yyyy-mm') as rpt_date,
+    sum(stu_num) as stu_num,
+    sum(total_fee) as total_fee,
+    sum(actual_fee) as cash_fee,
+    sum(discount_fee) as discount_fee_xymx,
+    sum(pd_fee) as pd_fee,
+    sum(pdfk_fee) as pdfk_fee,
+    sum(repay_fee) as repay_fee,
+    sum(std_pd_fee) as std_pd_fee,
+    sum(std_pdfk_fee) as std_pdfk_fee,
+    sum(std_txkj_fee) as std_txkj_fee,
+    sum(discount_fee_yh) as discount_fee_yh,
+    sum(add_fee) as add_fee,
+    sum(kj_fee) as kj_fee,
+    sum(total_fee)-sum(discount_fee)-sum(kj_fee)+sum(add_fee)-sum(discount_fee_yh) as sale_total_fee,
+    sum(actual_fee)+sum(pd_fee)-sum(pdfk_fee)+sum(repay_fee)+sum(std_pd_fee)-sum(std_pdfk_fee)-sum(std_txkj_fee) as count_total_fee
+    from (
+    select
+      aa.* from (
+        --学员数、学费总值、现金收入、优惠
+        select
+          (select email  from extend_user  where id=own_id ) as OWN_CODE,
+          own_id,
+          OWN_NAME,
+          sum(nvl(stu_num,0)) as stu_num,
+          sum(nvl(fee,0)) as total_fee,
+          sum(nvl(pay_fee,0)) as actual_fee,
+          sum(nvl(discount_fee,0)) as discount_fee,
+          0 as pd_fee,
+          0 as pdfk_fee,
+          0 as REPAY_FEE,
+          0 as STD_PD_FEE,
+          0 as STD_PDFK_FEE,
+          0 as STD_TXKJ_FEE,
+          0 as DISCOUNT_FEE_YH,
+          0 as ADD_FEE,
+          0 as KJ_FEE,
+          0 as SALE_TOTAL_FEE,
+          0 as COUNT_TOTAL_FEE,
+          RPT_DATE as rpt_date
+         from rpt_mon_stu
+         where  rpt_date >= trunc(mdate,'mm') and rpt_date< add_months(trunc(mdate,'mm'),1)
+        and rpt_version = '2020V1'
+                and OWN_ID is not null and OWN_NAME is not null and RPT_DATE is not null
+         group by OWN_ID,OWN_NAME,RPT_DATE
+
+        UNION ALL
+
+        --还款
+        select
+          ( select email  from extend_user  where id=own_id ) as OWN_CODE,
+           own_id,
+          OWN_NAME,
+          0 as stu_num,
+          0 as total_fee,
+          0 as actual_fee,
+          0 as discount_fee,
+          0 as pd_fee,
+          0 as pdfk_fee,
+          sum(nvl(rpt_money,0)) as REPAY_FEE,
+          0 as STD_PD_FEE,
+          0 as STD_PDFK_FEE,
+          0 as STD_TXKJ_FEE,
+          0 as DISCOUNT_FEE_YH,
+          0 as ADD_FEE,
+          0 as KJ_FEE,
+          0 as SALE_TOTAL_FEE,
+          0 as COUNT_TOTAL_FEE,
+          rpt_date  as rpt_date
+         from rpt_mon_cash
+         where  RPT_DATE>=trunc(mdate,'mm')
+                and RPT_DATE<trunc(mdate)+1
+                and RPT_DATE>STU_RPT_DATE
+        and rpt_version = '2020V1'
+                AND cash_type in ('贷款后期到账','在读期还款','毕业后还款')
+                and OWN_ID is not null and OWN_NAME is not null and RPT_DATE is not null
+        group by OWN_ID,OWN_NAME,rpt_date
+
+        union all
+        -- 优惠
+        select
+          (select email  from extend_user  where id=own_id ) as OWN_CODE,
+          own_id,
+          OWN_NAME,
+          0 as stu_num,
+          0 as total_fee,
+          0 as actual_fee,
+          0 as discount_fee,
+          0 as pd_fee,
+          0 as pdfk_fee,
+          0 as REPAY_FEE,
+          0 as STD_PD_FEE,
+          0 as STD_PDFK_FEE,
+          0 as STD_TXKJ_FEE,
+          sum(nvl(rpt_discount_fee,0)) as DISCOUNT_FEE_YH,
+          0 as ADD_FEE,
+          0 as KJ_FEE,
+          0 as SALE_TOTAL_FEE,
+          0 as COUNT_TOTAL_FEE,
+          rpt_date as rpt_date
+
+         from rpt_mon_dis
+         where  rpt_date >= trunc(mdate,'mm')
+                and rpt_date< add_months(trunc(mdate,'mm'),1)
+        and rpt_version = '2020V1'
+                and RPT_DISCOUNT_TYPE=2
+                and OWN_ID is not null and OWN_NAME is not null and RPT_DATE is not null
+        group by OWN_ID,OWN_NAME,rpt_date
+
+        union all
+        --扣减
+        select
+          (select email  from extend_user  where id=own_id ) as OWN_CODE,
+          own_id,
+          OWN_NAME,
+          0 as stu_num,
+          0 as total_fee,
+          0 as actual_fee,
+          0 as discount_fee,
+          0 as pd_fee,
+          0 as pdfk_fee,
+          0 as REPAY_FEE,
+          0 as STD_PD_FEE,
+          0 as STD_PDFK_FEE,
+          0 as STD_TXKJ_FEE,
+          0 as DISCOUNT_FEE_YH,
+          0 as ADD_FEE,
+          sum(nvl(cut_money,0)) as KJ_FEE,
+          0 as SALE_TOTAL_FEE,
+          0 as COUNT_TOTAL_FEE,
+          rpt_date  as rpt_date
+         from rpt_mon_cut
+         where  rpt_date >= trunc(mdate,'mm')
+                and rpt_date< add_months(trunc(mdate,'mm'),1)
+        and rpt_version = '2020V1'
+        group by OWN_ID,OWN_NAME,rpt_date
+
+        union all
+        -- 增加
+        select
+          (select email  from extend_user  where id=own_id ) as OWN_CODE,
+          own_id,
+          OWN_NAME,
+          0 as stu_num,
+          0 as total_fee,
+          0 as actual_fee,
+          0 as discount_fee,
+          0 as pd_fee,
+          0 as pdfk_fee,
+          0 as REPAY_FEE,
+          0 as STD_PD_FEE,
+          0 as STD_PDFK_FEE,
+          0 as STD_TXKJ_FEE,
+          0 as DISCOUNT_FEE_YH,
+          sum(nvl(back_money,0)) as ADD_FEE,
+          0 as KJ_FEE,
+          0 as SALE_TOTAL_FEE,
+          0 as COUNT_TOTAL_FEE,
+          rpt_date  as rpt_date
+         from rpt_mon_back
+         where  rpt_date >= trunc(mdate,'mm')
+                and rpt_date< add_months(trunc(mdate,'mm'),1)
+        and rpt_version = '2020V1'
+                and back_type='扣减找回'
+        group by OWN_ID,OWN_NAME,rpt_date
+
+        ) aa
+    ) group by OWN_id,OWN_CODE,own_name,rpt_date
+)mm;
+commit;
+
+-- 更新状态为启用的邮箱账号
+UPDATE rpt_sale_rank R SET (org_id,city_id,company_id,area_id,area_name,center_id,center_name,
+subgroup,position_id,position_name,is_entry,is_leave,entry_date,regular_date,product_line,center_order) =
+(SELECT org_id,city_id,company_id,area_id,area_name,center_id,center_name,
+subgroup,position_id,position_name,is_entry,is_leave,entry_date,regular_date,product_line,center_order FROM  EXTEND_USER U WHERE U.EMAIL = R.EMAIL AND u.state=1 AND rownum = 1)
+WHERE r.report_date = trunc(mdate,'mm');
+COMMIT;
+
+-- 更新状态为停用的邮箱账户
+UPDATE rpt_sale_rank R SET (org_id,city_id,company_id,area_id,area_name,center_id,center_name,
+subgroup,position_id,position_name,is_entry,is_leave,entry_date,regular_date,product_line,center_order) =
+(SELECT org_id,city_id,company_id,area_id,area_name,center_id,center_name,
+subgroup,position_id,position_name,is_entry,is_leave,entry_date,regular_date,product_line,center_order FROM  EXTEND_USER U WHERE U.EMAIL = R.EMAIL AND u.state=0 AND rownum = 1)
+WHERE  r.report_date = trunc(mdate,'mm') AND r.center_id IS NULL OR r.center_id ='';
+COMMIT;
+
+END;
