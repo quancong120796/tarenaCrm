@@ -1,0 +1,6 @@
+--更新已注销资金账户但注销时间为空的注销时间为注销审核中的注销时间 
+--验证更新记录数为12条
+update acc_bank_account_info a
+set DESTORY_DATE = （select DESTORY_DATE from fund_bankaccount_des where account_info_id = a.id)
+where state = 0 and DESTORY_DATE is null;
+

@@ -1,0 +1,20 @@
+--用户扩展停用查询
+select 
+login_name as 登录名称,
+name as 用户姓名,
+center_name as 中心名称,
+area_name as 区域名,
+POSITION_NAME as 岗位,
+MAIN_ROLE_NAME as 主角色名称,
+'停用' as 状态,
+ORG_NAME as 组织名称,
+COMPANY_NAME as 公司名称,
+INVITE_CODE as 邀请码,
+create_name as 创建人,
+update_name as 修改人,
+update_date as 修改时间
+ from 
+extend_user
+ where state = 0 
+ and UPDATE_DATE  >= to_date('2020/01/01','yyyy/mm/dd') 
+ and UPDATE_DATE < to_date('2020/08/11','yyyy/mm/dd') 

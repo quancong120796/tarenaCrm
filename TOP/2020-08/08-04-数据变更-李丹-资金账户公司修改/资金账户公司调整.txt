@@ -1,0 +1,4 @@
+--资金账户管理调整错误的公司
+--验证更新数据条数为1 
+update acc_bank_account_info set  company_code ='0251' ,company_name = '成都达内科技职业技能培训学校'
+where id = 7460;

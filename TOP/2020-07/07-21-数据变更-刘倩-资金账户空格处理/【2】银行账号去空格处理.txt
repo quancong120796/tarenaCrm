@@ -1,0 +1,17 @@
+--错误银行账号修正  去除账号后空格
+--资金账户ACC_BANK_ACCOUNT_INFO
+update ACC_BANK_ACCOUNT_INFO set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--资金账户初始化 fund_account_initial
+update fund_account_initial set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--资金日报初始化 fund_report_initial
+update fund_report_initial set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--资金余额表 fund_balance
+update fund_balance set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--收支项目日统计表  fund_rp_daily_count
+update fund_rp_daily_count set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--资金日盘表 fund_daily_counting
+update fund_daily_counting  set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+--资金日记账fund_daily_record
+update fund_daily_record set bank_no = '931905722510306'  where bank_no = '931905722510306 ' and company_code ='0562';
+
+

@@ -1,0 +1,10 @@
+--调整 月报日期2020-06-23 的划分其他成本 记录的划入划出类型为 公共教耗成本证书费
+update cost_other  m set other_name = 35 , in_other_name = 35 
+where type = 1  
+and exists(
+    select approve_time from cost_divide 
+     where trunc(approve_time) = to_date('2020/06/23','yyyy/mm/dd') 
+    and id = m.relation_id and type = 1
+    
+)
+and center_id = 2633 ;

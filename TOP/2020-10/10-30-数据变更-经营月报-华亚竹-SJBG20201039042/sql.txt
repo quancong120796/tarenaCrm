@@ -1,0 +1,9 @@
+ -- 【已通过邮件审批执行，无需执行】
+/*update rpt_mon_run set dblclick_row =  dblclick_row +1
+where  rpt_version = '2020V1'
+and center_type = 3 
+and rpt_type = 1
+and rpt_row >3 
+and rpt_row <265 
+and rpt_month < 10
+and 1!=1 ;*/

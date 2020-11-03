@@ -1,0 +1,7 @@
+--达内无锡童程童美恒隆中心、达内无锡童程童美城市管理中心
+--验证更新记录数为2
+update cost_month set cost_date = to_date('2020/09/30','yyyy/mm/dd')   where id in (159799,159800);
+--验证更新记录数为3
+update cost_other set cost_date = to_date('2020/09/30','yyyy/mm/dd')     where id in (3595591,3595590,3595592);
+--刷新9月月报
+call rpt_mon_run_proc_2020(to_date('2020/09/30','yyyy/mm/dd') );

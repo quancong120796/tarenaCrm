@@ -1,0 +1,16 @@
+--创建临时中间表 ,数据更新完成后可删除 
+create table temp_need_del_cost
+(
+  id     number,
+  value  number,
+  remark varchar2(1024),
+  type   number
+);
+--备份7月份其他成本数据 
+create table bak_cost_other_202007
+as select * from 
+cost_other co where  
+exists(select id from   cost_month 
+where id = co.relation_id 
+and cost_date >= to_date('2020/7/01','yyyy/mm/dd')
+and cost_date < to_date('2020/8/01','yyyy/mm/dd'));

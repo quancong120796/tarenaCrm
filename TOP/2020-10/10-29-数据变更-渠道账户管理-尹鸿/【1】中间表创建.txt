@@ -1,0 +1,35 @@
+--创建临时表用于接收导入数据作匹配 
+create table temp_channel_account_fp(
+company_name varchar2(128),
+compny_code varchar2(64),
+area_name varchar2(128),
+area_code varchar2(64),
+bill_type_name  varchar2(128),
+bill_type number
+); 
+
+-- 渠道账户管理增加发票类型字段 
+alter table CHANNEL_ACCOUNT_MANAGE add bill_type number; 
+--  渠道账户管理增加发票类型和主渠道账户字段备注
+comment on column CHANNEL_ACCOUNT_MANAGE.bill_type
+  is '发票类型(字典)';
+  
+--根据公司名称更新公司编码 
+update temp_channel_account_fp m   set compny_code = (
+select code  from mdm_company  where name = m.company_name
+);
+-- 根据大区名称更新大区编码
+update temp_channel_account_fp m   set area_code = (
+select code  from mdm_dic_option  where dic_code = 'finance_area' and name = m.area_name
+);
+
+--更具发票类型名更新发票类型
+update temp_channel_account_fp m   set bill_type = (
+select code  from mdm_dic_option  where dic_code = 'manage_cost_invoice_type' and name = m.bill_type_name
+);
+
+--根据中间表的发票类型更新渠道账户管理表的发票类型
+update channel_account_manage m 
+set bill_type = (
+select bill_type from temp_channel_account_fp fp
+where fp.compny_code = m.company_code);

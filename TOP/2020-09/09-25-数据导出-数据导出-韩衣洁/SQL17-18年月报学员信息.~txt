@@ -1,0 +1,22 @@
+
+select  
+to_char(report_date,'yyyy-mm-dd') as  月报日期,
+(select name from mdm_center where id = s.create_area_id) as 区域,
+(select name from mdm_center where id = s.create_center_id)  as 销售中心,
+id as 学员编码,
+stu_name as 学员姓名,
+(select course.short_name from mdm_course course where course.code= substr((select proc_code from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = s.id and APP_STATE='11' and rownum=1)),1,3))  as 课程方向,
+(select class_name from ca_class where id = (select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = s.id and APP_STATE='11' and rownum=1 ) ) as 系列班级,
+(select name from mdm_dic_option where dic_code = 'pm_ product_001' and code = (select LEARN_STYLE from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = s.id and APP_STATE='11'))) as 学习方式,
+(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=s.information_id)) as 信息来源,
+(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=s.information_id) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=s.information_id)) 信息渠道,
+(select name from  mdm_dic_option where dic_code = 'sale_info_003' and code = (select education from stu_info where id = s.id)) as 学历,
+(select name from  mdm_dic_option where dic_code = 'cont_c_info_002' and code = (select RPT_PAYMENT from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = s.id and APP_STATE='11') )as 付款方式,
+case when (select LOANS_TYPE from  stu_loans where EFFECTIVE_LOAN_STATE = 2 and stu_id = s.id and rownum=1) is null then '自筹资金' else (select name from mdm_dic_option where dic_code = 'stu_loans_001' and code = ( (select LOANS_TYPE from stu_loans where EFFECTIVE_LOAN_STATE = 2 and stu_id = s.id and rownum=1) ) ) 
+  end as 资金来源,
+1 as  学员人数,
+nvl(((select sum(nvl(rpt_money,0)) from  cont_c_info where HT_SUB_TYPE = '1001' and stu_id = s.id and APP_STATE='11')),0)  as 学费总值 
+from  stu_info s
+where report_date >=  to_date('2017/01/01','yyyy/mm/dd') 
+and report_date < to_date('2019/01/01','yyyy/mm/dd')
+

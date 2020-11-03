@@ -1,0 +1,7 @@
+--成都达内科技职业技能培训学校  128910474010107 调整金融机构-公会委员会、账户性质-其他
+--验证更新记录数为1
+update acc_bank_account_info set ACCOUNT_PROPERTY  = 4 ,BANK_TYPE = 'B21'  where id = 7460;
+--成都童程童美科技有限公司 128910468910103 
+--验证更新记录数为1
+update acc_bank_account_info set ACCOUNT_PROPERTY  = 4   where id = 7563;
+

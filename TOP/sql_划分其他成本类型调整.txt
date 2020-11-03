@@ -1,0 +1,12 @@
+--更新划分其他成本的划入划出类型
+--验证更新记录数为60条
+update cost_other  m set other_name = 10 , in_other_name = 10 
+where type = 1  
+and other_name in (104,100)
+and exists(
+    select approve_time from cost_divide 
+     where trunc(approve_time) = to_date('2020/06/01','yyyy/mm/dd') 
+    and id = m.relation_id and type = 1
+    
+)
+and center_id = 100 ;

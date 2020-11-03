@@ -1,0 +1,4 @@
+--8月月报学员手机号和身份证号查询
+select mobile,id_code 
+ from stu_info where report_date >= to_date('2020/08/01','yyyy/mm/dd') 
+and report_date < to_date('2020/09/01','yyyy/mm/dd') ;

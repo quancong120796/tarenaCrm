@@ -1,0 +1,280 @@
+
+SELECT
+    ID 单据编码， 
+   STU_NAME 姓名,
+   SERIES_CLASS_NAME 系列班级 ,
+   (select name from mdm_dic_option 
+   where dic_code = 'va_cert_pay_003' and code = used) as 缴费用途,
+   
+   (select name from mdm_dic_option 
+   where dic_code = 'cont_c_pay_004'
+    and code = PAYMENT) as 支付方式,
+    
+   
+   
+   (select name from mdm_dic_option 
+   where dic_code = 'va_cert_pay_001'
+    and code = RECT_PAY) as 收款类型,
+    
+    
+    (select name from mdm_dic_option 
+   where dic_code = 'cont_c_pay_010'
+    and code = refund_type) as 退费类型,
+   
+     
+   
+   MONEY 金额,
+   ADJUST_MONEY 核算金额,
+   CURRENCY 币种，
+   own_name 咨询顾问 ,
+   RECT_DATE 收据日期 ,
+   createTime 创建时间,
+    appDate 审批时间 , 
+    (select name from mdm_dic_option 
+   where dic_code = 'cont_c_pay_005'
+    and code = RECT_STATE) as 收据状态,
+    
+    RECT_CODE  收据编号,
+    
+   
+  
+  (case SOURCE when 'VA_STU_PAY' then '学生缴费'
+  when 'VA_OTHER_PAY' then '其它缴费'
+    when 'CONT_C_PAY' then '合同收款'
+      when 'CONT_B_EXEC_PAY' then '合同B缴费' end)  分类,
+    
+     
+     (select name from mdm_dic_option 
+   where dic_code = 'cont_c_pay_002'
+    and code = RCW_TYPE) as 单据状态,
+    
+    (select name from mdm_dic_option 
+   where dic_code = 'bud_area_003'
+    and code = APP_STATE) as 审批状态,
+    HT_COM_NAME 合同主体,
+    HT_COM_CODE 合同公司账套号,
+     HT_CODE 合同编号,
+     RECT_COM_NAME 缴费主体,
+     RECT_COM_CODE 缴费主体账套号,
+      CENTER_NAME 缴费中心,
+      SALE_CENTER 销售中心，
+       ''''||ID_CODE 身份证号 ,
+       STU_ID 学生编码 ,
+       RECT_DATE 收据日期
+                  FROM (SELECT ID,
+                               STU_NAME,
+                               USED,
+                               RECT_PAY,
+                               MONEY,
+                               PAYMENT,
+                               FEE,
+                               DUE_FEE,
+                               COM_NAME,
+                               RECT_COM_NAME,
+                               RECT_COM_CODE,
+                               APP_STATE,
+                               CURRENCY,
+                               ADJUST_MONEY,
+                               ORG_ID,
+                               RECT_CODE,
+                               RECT_DATE,
+                               CENTER_ID,
+                               RECT_STATE,
+                               RCW_TYPE,
+                               CENTER_NAME,
+                               'VA_OTHER_PAY' as SOURCE,
+                               '' AS SERIES_CLASS_NAME,
+                               CENTER_NAME SALE_CENTER,
+                               '' ID_CODE,
+                               RE_RECT_SUBJECT,
+                               '' AS HT_COM_CODE,
+                               STU_ID,
+                               '' AS HT_CODE,
+                               '' AS HT_COM_NAME,
+                               CASHIER_DATE,
+                               (select stu.own_name
+                                  from stu_info stu
+                                 where stu.id = stu_id) own_name,
+                               refund_type,
+                               (select a.work_type
+                                  from mdm_center a
+                                 where a.id = center_id) as businessTypeOfFee,
+                               null as businessTypeOfSale,
+                               create_time as createTime,
+                               app_date as appDate,
+                               (select stu.information_id
+                                  from stu_info stu
+                                 where stu.id = stu_id) as informationId
+                          FROM VA_OTHER_PAY
+                         WHERE 1 = 1
+                           AND RECT_CODE IS NOT NULL
+                           AND APP_STATE = 11
+                           and app_date >= to_date('2020-7-1','yyyy-mm-dd') and app_date < to_date('2020-8-1','yyyy-mm-dd')
+                        UNION
+                        SELECT ID,
+                               STU_NAME,
+                               USED,
+                               RECT_PAY,
+                               MONEY,
+                               PAYMENT,
+                               FEE,
+                               DUE_FEE,
+                               COM_NAME,
+                               RECT_COM_NAME,
+                               RECT_COM_CODE,
+                               APP_STATE,
+                               CURRENCY,
+                               ADJUST_MONEY,
+                               ORG_ID,
+                               RECT_CODE,
+                               RECT_DATE,
+                               CENTER_ID,
+                               RECT_STATE,
+                               RCW_TYPE,
+                               CENTER_NAME,
+                               'VA_STU_PAY' AS SOURCE,
+                               SERIES_CLASS_NAME,
+                               (SELECT stu.create_center_name
+                                  FROM stu_info stu
+                                 WHERE ccp.stu_id = stu.id) as SALE_CENTER,
+                               '' ID_CODE,
+                               RE_RECT_SUBJECT,
+                               '' AS HT_COM_CODE,
+                               STU_ID,
+                               '' AS HT_CODE,
+                               '' AS HT_COM_NAME,
+                               CASHIER_DATE,
+                               (select stu.own_name
+                                  from stu_info stu
+                                 where stu.id = ccp.stu_id) as own_name,
+                               refund_type,
+                               (select work_type
+                                  from mdm_center a
+                                 where a.id = ccp.center_id) as businessTypeOfFee,
+                               (select work_type
+                                  from mdm_center a
+                                 where a.id =
+                                       (select create_center_id
+                                          from stu_info stu
+                                         where stu.id = ccp.stu_id)) as businessTypeOfSale,
+                               create_time as createTime,
+                               app_date as appDate,
+                               (select stu.information_id
+                                  from stu_info stu
+                                 where stu.id = stu_id) as informationId
+                          FROM VA_STU_PAY ccp
+                         WHERE 1 = 1
+                          AND RECT_CODE IS NOT NULL
+                           AND APP_STATE = 11
+                           and app_date >= to_date('2020-7-1','yyyy-mm-dd') and app_date < to_date('2020-8-1','yyyy-mm-dd')
+                        UNION
+                        SELECT ID,
+                               STU_NAME,
+                               USED,
+                               RECT_PAY,
+                               MONEY,
+                               to_number(PAYMENT) as PAYMENT,
+                               FEE,
+                               DUE_FEE,
+                               COM_NAME,
+                               RECT_COM_NAME,
+                               RECT_COM_CODE,
+                               APP_STATE,
+                               CURRENCY,
+                               ADJUST_MONEY,
+                               ORG_ID,
+                               RECT_CODE,
+                               RECT_DATE,
+                               CENTER_ID,
+                               RECT_STATE,
+                               RCW_TYPE,
+                               CENTER_NAME,
+                               'CONT_C_PAY' AS SOURCE,
+                               SERIES_CLASS_NAME,
+                               (SELECT stu.create_center_name
+                                  FROM stu_info stu
+                                 WHERE ccp.stu_id = stu.id) as sale_center,
+                               (SELECT cci.id_code
+                                  FROM CONT_C_INFO cci
+                                 WHERE ID = ccp.CONT_C_ID) ID_CODE,
+                               '' AS RE_RECT_SUBJECT,
+                               HT_COM_CODE,
+                               STU_ID,
+                               CONT_C_CODE AS HT_CODE,
+                               HT_COM_NAME,
+                               CASHIER_DATE,
+                               (select stu.own_name
+                                  from stu_info stu
+                                 where stu.id = stu_id) own_name,
+                               refund_type,
+                               (select work_type
+                                  from mdm_center a
+                                 where a.id = ccp.center_id) as businessTypeOfFee,
+                               (select work_type
+                                  from mdm_center a
+                                 where a.id =
+                                       (select create_center_id
+                                          from stu_info stu
+                                         where stu.id = ccp.stu_id)) as businessTypeOfSale,
+                               create_time as createTime,
+                               app_date as appDate,
+                               (select stu.information_id
+                                  from stu_info stu
+                                 where stu.id = stu_id) as informationId
+                          FROM CONT_C_PAY ccp
+                         WHERE 1 = 1
+                          AND RECT_CODE IS NOT NULL
+                           AND APP_STATE = 11
+                           and app_date >= to_date('2020-7-1','yyyy-mm-dd') and app_date < to_date('2020-8-1','yyyy-mm-dd')
+                           
+                           
+                           
+                        UNION
+                        SELECT ID,
+                               SCHOOL_NAME AS STU_NAME,
+                               USED,
+                               RECT_PAY,
+                               MONEY,
+                               PAYMENT,
+                               FEE,
+                               DUE_FEE,
+                               '' as COM_NAME,
+                               RECT_COM_NAME,
+                               RECT_COM_CODE,
+                               TO_CHAR(APP_STATE) AS APP_STATE,
+                               TO_CHAR(CURRENCY) AS CURRENCY,
+                               ADJUST_MONEY,
+                               ORG_ID,
+                               RECT_CODE,
+                               RECT_DATE,
+                               CENTER_ID,
+                               TO_CHAR(RECT_STATE) AS RECT_STATE,
+                               RCW_TYPE,
+                               CENTER_NAME,
+                               'CONT_B_EXEC_PAY' AS SOURCE,
+                               '' AS SERIES_CLASS_NAME,
+                               CENTER_NAME SALE_CENTER,
+                               '' ID_CODE,
+                               '' AS RE_RECT_SUBJECT,
+                               HT_COM_CODE,
+                               SCHOOL_ID AS STU_ID,
+                               HT_CODE,
+                               HT_COM_NAME,
+                               CASHIER_DATE,
+                               null as own_name,
+                               null as refund_type,
+                               (select a.work_type
+                                  from mdm_center a
+                                 where a.id = center_id) as businessTypeOfFee,
+                               null as businessTypeOfSale,
+                               create_time as createTime,
+                               app_date as appDate,
+                               null as informationId
+                          FROM CONT_B_EXEC_PAY
+                         WHERE 1 = 1
+                          AND RECT_CODE IS NOT NULL
+                           AND APP_STATE = 11
+                           and app_date >= to_date('2020-7-1','yyyy-mm-dd') and app_date < to_date('2020-8-1','yyyy-mm-dd'))
+                 WHERE 1 = 1
+                 ORDER BY SOURCE, ID DESC
+             

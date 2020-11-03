@@ -1,0 +1,14 @@
+--导出CRM中所有中心清单（含成人、少儿、管理中心），
+--包含如下字段：中心编码、中心名称、中心状态（在营&关闭）、中心所属区域、中心所属城市、中心性质（线下中心、管理中心）、
+--中心所属业务线（成人社招、成人渠道、少儿）
+
+select
+code as 中心编码,
+name as 中心名称,
+case when state =0 then '关闭' else  '在营' end as 中心状态,
+(select name from mdm_center where id = m.parent_id) as 中心所属区域,
+(select name from mdm_city where id = m.city_id) as 中心所属城市,
+ case when m.center_type = 5 then '管理中心' else '线下中心' end as 中心性质, 
+(select name from mdm_dic_option  where dic_code = 'mdm_center_001' and code = m.work_type) as 中心所属业务线
+from mdm_center m 
+ 

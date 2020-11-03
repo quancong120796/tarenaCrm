@@ -1,0 +1,10 @@
+-- 错误月支出数据 删除
+-- 达内兰州童程童美西站万辉广场中心  公共教耗成本房租物业费	 -376,990.49   id 3561132
+delete from cost_other where id = 3561132;
+--备份 
+create table rpt_mon_run_20200928 
+as select * from rpt_mon_run
+ where rpt_year = 2020 and rpt_month = 8 and rpt_version = '2020V1' ;
+--刷新8月月报 
+call rpt_mon_run_proc_2020(to_date('2020-08-31','yyyy-MM-dd'));
+

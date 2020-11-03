@@ -1,0 +1,11 @@
+--更新成本划分日期
+--验证记录数 1条
+update cost_divide set approve_time = to_date('2020/09/09','yyyy/mm/dd') where id = 400081;
+--更新划分其他成本日期
+--验证记录数 1条
+update cost_other set cost_date =  to_date('2020/09/09','yyyy/mm/dd') where id = 3573925;
+--刷新9月份月报 
+call rpt_mon_run_proc_2020(to_date('2020/09/30','yyyy/mm/dd'));
+
+
+

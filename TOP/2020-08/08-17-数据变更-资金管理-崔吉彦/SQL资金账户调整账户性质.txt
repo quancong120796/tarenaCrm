@@ -1,0 +1,5 @@
+-- 石家庄达内童程科技有限公司  账号31190152361080  账户性质调整为其他 
+--验证更新数据记录数为1 
+update acc_bank_account_info set  ACCOUNT_PROPERTY = 4   where id =  7568;
+
+

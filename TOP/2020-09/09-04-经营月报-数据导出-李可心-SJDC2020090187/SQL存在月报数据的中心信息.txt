@@ -1,0 +1,19 @@
+--查询存在月报数据的中心信息
+select  
+(select code from mdm_center where id =a.center_id ) as 中心编码,
+(select name from mdm_center where id =a.center_id)  as 中心名称,
+(select name from mdm_center  where id = (select parent_id from mdm_center where id = a.center_id)) as 区域名,
+(select name from mdm_city where id = (select city_id from mdm_center where id = a.center_id)) as 城市,
+(select case when center_type = 5 then '管理中心' else '运营中心' end  from mdm_center where id = a.center_id ) as 中心性质,
+(select case when state = 1 then '在营' else '关闭' end from mdm_center where id = a.center_id) as  中心状态
+from (
+ select distinct
+ center_id 
+ from rpt_mon_run m
+ where 
+ rpt_year =2020 and  rpt_month = 8
+ and rpt_version = '2020V1' 
+ and rpt_row is not null and rpt_row != 0 
+ and rpt_value is not null and rpt_value != 0
+ and center_id ! = 0
+)a ;

@@ -1,0 +1,19 @@
+--资金管理错误公司调整
+--ACC_BANK_ACCOUNT_INFO
+--验证更新数据1条
+update ACC_BANK_ACCOUNT_INFO set company_code = '0218',company_name = 'Tarena International, Inc.' where id = 7401;
+--fund_account_initial
+--验证更新数据1条
+update fund_account_initial set company_code = '0218',company_name = 'Tarena International, Inc.' where account_info_id = 7401 and currency = 2; 
+--fund_balance
+--验证更新数据61条
+update fund_balance set company_code = '0218',company_name = 'Tarena International, Inc.' where account_info_id = 7401 and currency = 2; 
+--fund_rp_daily_count
+--验证更新数据2条
+update fund_rp_daily_count set company_code = '0218',company_name = 'Tarena International, Inc.' where account_info_id = 7401 and currency = 2; 
+--fund_daily_record
+--验证更新数据9条
+update fund_daily_record set company_code = '0218',company_name = 'Tarena International, Inc.' where account_info_id = 7401 and currency = 2; 
+--fund_daily_counting
+--验证更新数据4条
+update fund_daily_counting set company_code = '0218',company_name = 'Tarena International, Inc.' where account_info_id = 7401 and currency = 2; 

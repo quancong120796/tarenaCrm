@@ -1,0 +1,2 @@
+--sql已执行（赵毅老师） 无需再执行
+--update ukey_info set accountinfo_id='931905722510306' where accountinfo_id like '%931905722510306%';

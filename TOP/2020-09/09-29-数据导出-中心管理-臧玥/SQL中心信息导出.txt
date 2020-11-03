@@ -1,0 +1,12 @@
+--查询中心信息 
+--包含如下字段：id,中心编码、CRM名称、业务分类、中心分类、状态、开始运营日期   
+
+select
+id as 序列,
+code as 中心编码,
+name as CRM名称,
+(select name from mdm_dic_option  where dic_code = 'mdm_center_001' and code = m.work_type) as 中心所属业务线,
+(select name from mdm_dic_option where dic_code = 'mdm_center_002' and code = m.center_type )中心分类,
+case when state =0 then '停用' else  '启用' end as 状态,
+to_char(run_date,'yyyy-MM-dd') as 开始运营日期
+from mdm_center m 

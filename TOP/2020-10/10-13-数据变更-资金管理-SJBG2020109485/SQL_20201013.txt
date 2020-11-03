@@ -1,0 +1,2 @@
+--sql已执行（赵毅老师） 无需再执行
+--update ACC_BANK_ACCOUNT_INFO set bank_no='91470078801800001048' where bank_no like '%91470078801800001048%';

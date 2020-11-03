@@ -1,0 +1,5 @@
+--资金账户开户网点及账户性质调整  青岛市崂山区童程童美教育培训学校有限公司
+--开户网点 青岛市北支行》招商银行青岛市北支行 账户性质 一般户》验资户
+update acc_bank_account_info 
+set SUB_BANK='招商银行青岛市北支行',ACCOUNT_PROPERTY=3
+where id = 7544;

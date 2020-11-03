@@ -1,0 +1,11 @@
+--【1】
+select * from crm3db.channel_account_initial where id in (602,603);
+-- 【2】
+select distinct company_code,company_name  from channel_account_manage where bill_type is null;
+--【3】
+select distinct company_code,company_name  from crm3db.channel_account_manage m
+where not exists(select 1 from crm3db.temp_channel_account_fp where  compny_code =m.company_code );
+ 
+
+select create_time from crm3db.channel_account_manage m
+where company_code in ('0547','0506','0447','0509');

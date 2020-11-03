@@ -1,0 +1,25 @@
+--删除数据  type=1  
+--验证删除记录数为 382条
+  delete from cost_other co
+  where exists(select id from temp_need_del_cost where id = co.id and type = 1);
+  
+  --更新金额
+  --验证更新记录数为16条 
+  update cost_other co 
+  set value = (select value from temp_need_del_cost where id = co.id)
+  where exists(
+  select id from temp_need_del_cost where id = co.id and type = 2 and value is not null
+  );
+  
+  --更新摘要、成本类型
+  --验证更新记录数 1条
+  update cost_other set other_name='59', remark='年度:2020,期间:07,NC公司编码 :0075,NC公司名称:达内时代科技集团有限公司北京第四分公司,科目编码:66021701,科目名称:印花税,NC中心编码 : 110016,中心名称:达内北京亚运村中心,借方金额:-46.1,贷方金额:-46.1,来源NC,币种:人民币,汇率:1.0,借方金额:-46.1,贷方金额:-46.1,转换后借方金额:-46.1,转换后贷方金额:-46.1'
+  where id = 3541130;
+  
+  --更新摘要
+  --验证更新记录数 1条
+  update cost_other set other_name='59',remark='年度:2020,期间:07,NC公司编码 :0257,NC公司名称:达内时代科技集团有限公司北京第十二分公司,科目编码:66021701,科目名称:印花税,NC中心编码 : 110017,中心名称:达内北京万寿路中心,借方金额:-30.5,贷方金额:-30.5,来源NC,币种:人民币,汇率:1.0,借方金额:-30.5,贷方金额:-30.5,转换后借方金额:-30.5,转换后贷方金额:-30.5'
+  where id = 3533262;
+  
+  --验证无误可删除临时表  temp_need_del_cost
+  -- drop table temp_need_del_cost;

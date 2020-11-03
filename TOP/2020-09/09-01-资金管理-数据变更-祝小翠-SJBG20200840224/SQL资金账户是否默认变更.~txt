@@ -1,0 +1,6 @@
+--调整资金账户默认
+--杭州瀚孺教育科技有限公司  571909280110606
+--验证更新记录数为1条
+update acc_bank_account_info set is_default = 1  where id = 189;
+--达内软件技术（杭州）有限公司  571907243510901
+update acc_bank_account_info set is_default = 1  where id = 57; 
