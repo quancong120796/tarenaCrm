@@ -10,3 +10,4 @@ and exists(
     
 )
 and center_id = 100 ;
+---
