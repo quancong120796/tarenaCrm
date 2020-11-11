@@ -1,0 +1,22 @@
+CREATE OR REPLACE PROCEDURE rpt_month_manage_proc_lock
+AS
+
+BEGIN
+  /* 2019/1/10 取消自动上报功能 */
+ /*   
+ update stu_info st  set REPORT_DATE= trunc(sysdate,'mm')-1,REPORT_STATE=11
+   where nvl(REPORT_STATE,0) <>11 and INCLASS_STATE=11 and INCLASS_DATE>trunc(sysdate,'mm')-3 and REPORT_STATE<>10
+ and not exists (select    1  From cont_c_info ci  where   APP_STATE<>11 and HT_SUB_TYPE='1001' and st.id=ci.stu_id)
+ and  exists (select    1  From cont_c_info ci  where   APP_STATE=11 and HT_SUB_TYPE='1001' and st.id=ci.stu_id)  ;
+ commit;
+  update CONT_C_INFO  set APP_STATE=11,app_date=sysdate, RPT_DATE= trunc(sysdate,'mm')-1,RPT_MONEY=fee,RPT_PAYMENT=PAYMENT ,RPT_SOURCE_FUND=SOURCE_FUND
+   where APP_STATE='11' and HT_SUB_TYPE='1001' and stu_id in(select id from stu_info where REPORT_STATE=11 and REPORT_DATE<trunc(sysdate,'mm') and REPORT_DATE>= trunc(sysdate,'mm')-20)  ;
+ commit;
+ */
+   /* 2019/1/10 取消自动上报功能 */
+ --更新月报费用调整
+  update cost_divide set APPROVE_STATE=11,APPROVE_TIME=trunc(sysdate,'mm')-1   where type=1  and APPROVE_STATE=2;
+  commit;
+ 
+   commit;
+END ;

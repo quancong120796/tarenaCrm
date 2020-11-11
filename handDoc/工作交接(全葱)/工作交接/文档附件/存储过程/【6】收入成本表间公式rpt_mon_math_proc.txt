@@ -1,0 +1,2550 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_math_run_proc_2020( mdate date)
+AS
+/** 表间公式及补充语句
+  创建人：zhx
+  创建时间：2019-2-26
+  rpt_row_code not  in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+  依次为以下指标 ：(公共营业税附加,所得税，中心就业班项目经理数,中心就业班班主任数,院校孵化班项目经理数,院校孵化班班主任数,项目毛利)
+  修改时间：2020-05-12
+  修改内容:增加版本条件
+  修改内容:2020-05-18 增加总部合并单独取值
+  修改时间:2020-10-27 收入模板调整第四行后往下移一行，影响童程收入转成本公式，总部部分童程收入公式
+**/
+BEGIN
+
+--公共营业税附加/公共所得税
+--注：若收入模板调整(增值税及附加、所得税行调整)，那么指标维护行的行号需调整
+--即 RPT_MON_KPI_RULE_2020 表:kpi_code in ('61','62') and rpt_type=2 条件
+/**
+  修改人：qc
+  修改时间：2020-04-23
+  修改内容：集团毛利项目指标 成本转收入(渠道),rpt_row 取值 RPT_MON_KPI_RULE_2020 表，方便之后维护
+**/
+
+update rpt_mon_run t set t.rpt_type=1,t.rpt_col=t.rpt_col-2 where t.rpt_row_code='61' and t.rpt_type = 2 and  rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM')) and rpt_version = '2020V1';
+update rpt_mon_run t set t.rpt_type=1,t.rpt_col=t.rpt_col-2 where t.rpt_row_code = '62' and t.rpt_type = 2 and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM')) and rpt_version = '2020V1';
+update rpt_mon_run t set t.rpt_type=1,t.rpt_col=t.rpt_col-2,t.rpt_row= (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+              where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='集团项目毛利')
+           ,t.rpt_row_name='集团项目毛利'
+where t.rpt_row_code = '4008' and t.rpt_type = 2 and center_type = 2 and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM')) and rpt_version = '2020V1';
+
+commit;
+
+
+/*******************成本转收入*******************/
+
+--员工数-社招
+/**
+  修改时间:2020-04-24
+  修改内容:收入行 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='员工总数') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '员工总数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (63,69,75,81,87,93,140,147,153,197,203)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--员工数-渠道
+/**
+  修改时间:2020-04-24
+  修改内容:收入行 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='员工总数') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '员工总数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (64,70,76 ,109,118,126 ,171,177)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 32,rpt_col
+
+);
+commit;
+
+--员工数-童程
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表(新增少儿收入行指标维护)
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='员工总数') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '员工总数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_row in (63,69,75,81,87,145,152,199,205)
+       and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 36,rpt_col
+
+);
+commit;
+
+
+--中心数（社招+渠道+童程 数据来源 会计管理-月支出）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+           (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= t.center_type and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='中心数') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '中心数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run t
+where rpt_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = 13;
+
+commit;
+
+
+--教室数（社招、渠道,数据来源于crm中的教务管理-教室）
+--少儿教室数数据来源于kcrm
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= t.center_type and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='教室数') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '教室数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run t
+where rpt_type=2 and center_type != 3
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = 14;
+
+commit;
+
+
+--场地面积（社招、渠道、少儿 数据来源中心管理-场地面积）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= t.center_type and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='场地面积') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '场地面积' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run t
+where rpt_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = case when center_type=3 then 15 else 16 end;
+
+commit;
+
+
+--中心座位数（社招、渠道 教务管理-教室）
+--少儿教室数数据来源于kcrm
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= t.center_type and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='中心座位数') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '中心座位数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run t
+where rpt_type=2 and center_type != 3
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = 17;
+
+commit;
+
+
+--招生成本合计（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (64,65,67 ,70,71,73 ,76,77,79 ,88,89,91 ,94,95,97 ,99,100,101,102,103,104,105,106,
+                             107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,82,83,85)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--招生成本合计（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (65,66,68 ,77,78,80 ,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,71,72,74)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--招生成本合计（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and (rpt_row in (64,65,67,70,71,73,76,77,79,82,83,85,88,89,91) or (rpt_row>=93 and rpt_row<=132))
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--招生销售成本小计（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生销售成本小计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生销售成本小计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--招生销售成本小计（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生销售成本小计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生销售成本小计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (82,83,84,85,86,87,88,89,90,91,92,93,94,95,96)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--招生销售成本小计（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生销售成本小计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生销售成本小计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             --TC成本模板调整 原93-121
+       and (rpt_row>=93 and rpt_row<=132)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--教学成本合计（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='教学成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(case when rpt_row=(select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 1 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+        then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '教学成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (141,142,144,145 ,148,149,151 ,154,155,157 ,159,160,161,162，
+                              165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,183,184)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--教学成本合计（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='教学成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(case when rpt_row= (select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 2 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+       then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '教学成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (112,113,115,116 ,121,122,124 ,127,128,130 ,132,133,134,135，
+                              138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,157,158)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--教学成本合计（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='教学成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+       sum(case when rpt_row= (select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 3 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+     then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '教学成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             --TC成本模板调整 158~161 164~183 185,186
+       and (rpt_row in (146,147,149,150,153,154,156,158,159,160,161,185,186) or (rpt_row>=164 and rpt_row<=183))
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--管理成本合计（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='管理成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '管理成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (198,199,201 ,204,205,207 ,209,210,211,212,213,214,215,216,217,218,219,220,221)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--管理成本合计（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='管理成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '管理成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (172,173,175 ,178,179,181 ,183,184,185,186,187,188,189,190,191,192,193,194,195)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--管理成本合计（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='管理成本合计') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '管理成本合计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             --TC成本模板调整 原 rpt_row in (187,188,190 ,193,194,196 ,198,199,200,201,202,203,204,205,206,207,208,209,210)
+       and (rpt_row in (200,201,203,206,207,209) or (rpt_row>= 211 and rpt_row<= 223))
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--人工工资（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工工资') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工工资' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (64,70,76,82,88,94 ,141,148,154 ,198,204)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--人工工资（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工工资') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工工资' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (65,71,77 ,112,121,127 ,172,178)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--人工工资（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工工资') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工工资' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             --TC成本模板调整 原 (64,70,76,82,88,135,142,187,193)
+       and rpt_row in (64,70,76,82,88,146,153,200,206)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--人工奖金（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工奖金') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工奖金' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (65,71,77,83,89,95 ,142,149,155 ,199,205)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--人工奖金（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工奖金') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工奖金' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (66,72,78 ,113,122,128 ,173,179)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--人工奖金（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='人工奖金') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '人工奖金' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             --TC成本模板调整 原 (65,71,77,83,89,136,143,188,194)
+       and rpt_row in (65,71,77,83,89,147,154,201,207)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+
+--运营成本（社招）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='运营成本') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(case when rpt_row= (select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 1 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+       then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '运营成本' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (64,70,76,82,88,94 ,141,148,154 ,198,204 ,65,71,77,83,89,95 ,142,149,155 ,199,
+                             205,67,73,79,85,91,97 ,144,151,157 ,201,207,99,100,101,102,103,104,105,106,107,108,109,110,
+                             111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,159,160,161,162,165,166,167,168,169,170,
+                             171,172,173,174,175,176,177,178,179,180,181,183  ,209,210,211,212,213,214,215,216,217,218,
+                             219,220,221,145,184)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--运营成本（渠道）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='运营成本') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(case when rpt_row= (select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 2 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+       then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '运营成本' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (65,71,77 ,112,121,127 ,172,178 ,66,72,78 ,113,122,128 ,173,179 ,68,74,80 ,
+                             115,124,130 ,175,181 ,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96  ,132,133,134,135,138,
+                             139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155 ,157 ,183,184,185,186,
+                             187,188,189,190,191,192,193,194,195,116,158)
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--运营成本（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+  其中  and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' 为 学员划转结算划出 指标，取负值,补贴金额取负值
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='运营成本') as rpt_row,
+       rpt_col-2 as rpt_col,
+       sum(case when rpt_row=(select vdo01_code from RPT_MON_KPI_RULE_2020 r where r.center_type= 3 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_code='60' and remark = 'cost_other_001' )
+       or rpt_row= (select kpi_row from RPT_MON_KPI_RULE_2020 r where r.center_type= 3 and r.rpt_type=2 and r.kpi_type=1 and r.kpi_name='补贴金额' )
+     then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '运营成本' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and (rpt_row in (64,70,76,82,88,146,153,200,206,65,71,77,83,89,147,154,201,207,67,73,79,85,91,149,156,203,209,185,186,150,226)
+           or(rpt_row>=93 and rpt_row<=132) or (rpt_row>=158 and rpt_row<=161)
+           or (rpt_row>=164 and rpt_row<=183) or (rpt_row>=211 and rpt_row<=223))
+             and (rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+                 or rpt_row_code is null)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 12,rpt_col
+
+);
+commit;
+
+
+--学管数（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='学管数') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '学管数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=3
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+   and rpt_row = 152;
+
+commit;
+
+
+
+--讲师数（童程）
+/**
+  修改时间:2020-04-24
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='讲师数') as rpt_row,
+           rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '讲师数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=3
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+   and rpt_row = 145;
+
+commit;
+
+--招生员工数-前端(社招)
+/**
+  修改时间:2020-04-26
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生员工数-前端') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生员工数-前端' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (63,69,75,81,87,93)
+             and rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--招生员工数-前端(渠道)
+/**
+  修改时间:2020-04-26
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生员工数-前端') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生员工数-前端' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (64,70,76)
+             and rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--招生员工数-前端(童程)
+/**
+  修改时间:2020-04-26
+  修改内容:收入模板调整 rpt_row 取值 RPT_MON_KPI_RULE_2020 表
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 3 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='招生员工数-前端') as rpt_row,
+       rpt_col-2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生员工数-前端' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=2 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+             and rpt_row in (63,69,75,81,87)
+             and rpt_row_code not in('61','62','4001','4002','4003','4004','4005','4006','4007','4008')
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type, 40,rpt_col
+
+);
+commit;
+
+
+
+--项目经理数（社招）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+--kpi_code 对应成本中更新在岗员工对应月报行中 rpt_mon_staff 表的code 即EHR中岗位的code
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1
+      and rpt_type=1 and kpi_type=1  and kpi_name='项目经理数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '项目经理数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=1
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='18' );
+
+commit;
+
+
+
+--班主任数/职业发展经理 （社招）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+--kpi_code 对应成本中更新在岗员工对应月报行中 rpt_mon_staff 表的code 即EHR中岗位的code
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1
+      and rpt_type=1 and kpi_type=1  and kpi_name='班主任数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '班主任数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=1
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='20' );
+
+commit;
+
+
+
+--中心能效项目经理数（渠道）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+      and rpt_type=1 and kpi_type=1  and kpi_name='就业班项目经理数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '就业班项目经理数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='18' );
+
+commit;
+
+
+--中心能效班主任数（渠道）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+      and rpt_type=1 and kpi_type=1  and kpi_name='就业班班主任数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '就业班班主任数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='20' );
+
+commit;
+
+
+
+--孵化班项目经理数（渠道）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+      and rpt_type=1 and kpi_type=1  and kpi_name='孵化班项目经理数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '孵化班项目经理数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='19' );
+
+commit;
+
+
+
+--孵化班班主任数（渠道）
+/**
+修改时间:2020-04-23
+修改内容: rpt_row改为从RPT_MON_KPI_RULE_2020表中获取
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type,
+       (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+      and rpt_type=1 and kpi_type=1  and kpi_name='孵化班班主任数' ) as rpt_row
+           ,rpt_col-2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '孵化班班主任数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=2 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+     and rpt_row = (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2
+   and rpt_version = '2020V1'
+         and  rpt_type=2 and kpi_type=1  and remark = 'cost_staff_001' and kpi_code='21' );
+
+commit;
+
+
+
+/*******************收入转成本*******************/
+
+
+--招生数（社招）
+/**
+修改内容:2020-05-26  社招模板调整，公式行修改，去除有效转无效，无效转有效的学员数
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,23 as rpt_row,rpt_col+2 as rpt_col,
+           sum(case when rpt_row in (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1 and rpt_type=1 and kpi_type=1  and kpi_name = '划出学员数' )
+       then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+        --线下班
+              and rpt_row in (131,142,153,164,175,186,197,208,219,230,241,252,263,274,285,296,307,318,329,340,351,362,373,384,395,406,417,428,439,450,
+        --线上班+复购
+             506,517,528,539,550,561,572,583,594,605,
+       --跨中心 联合招生
+       124,127,617)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--招生数（渠道）
+/**
+修改内容: 2020-05-26 去除有效转无效 无效转有效
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,24 as rpt_row,rpt_col+2 as rpt_col,
+           sum(case when  rpt_row= (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2 and rpt_type=1 and kpi_type=1  and kpi_name='划出学员数' )
+       then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       --就业班
+             and rpt_row in (147,158,169,180,191,202,213,224,235,246,257,268,279,290,301,312,323,334,
+       --孵化班
+            357,368,379,390,401,412,423,434,445,456,467,478,489,500,511,522,533,544,
+      --专业共建
+            567,578,589,600,611,622,633,644,655,666,677,688,699,710,721,732,743,754,
+      --复购
+      777,788,799,810,821,832,876,843,854,865,
+      --跨中心
+      140,143)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--招生数（童程）
+/**
+修改内容:2020-05-27 增加了 dblclick is null的条件，去除了帮招的招生人数
+    少儿招生数加和不计算其中童程在线新增和续费人数
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,24 as rpt_row,rpt_col+2 as rpt_col,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       --新增注册人次
+             and nvl(DBLCLICK_ROW,rpt_row)  in (100,120,140,160,200,240,
+       --续费人次
+       102,122,142,162,202,242)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+--插入收入转成本中童程在线中心和重点区域线上中心少记的帮招和双记中心(童程招生数)
+--其中offline_db_type是为了导出成本集团合并时 去除该部分标识的数据(避免帮招部分重复)
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row,offline_db_type)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row,1 as offline_db_type
+from(
+
+     select
+      (select parent_id from mdm_center where id = f.dblclick_center_id) as area_id
+      ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.dblclick_center_id)) as area_name
+      ,(select city_id from mdm_center where id = f.dblclick_center_id) as city_id
+      ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.dblclick_center_id)) as city_name
+     ,dblclick_center_id as center_id
+     , (select name from mdm_center where id = dblclick_center_id) as center_name
+      ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=dblclick_center_id  and rownum=1) AS  center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,24 as rpt_row,rpt_col+2 as rpt_col,
+           sum( nvl(rpt_value,0) ) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '招生数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run f
+       where rpt_type=1 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and dblclick_center_id is not null
+    --新增注册人数
+       and
+       DBLCLICK_ROW  in  (100,120,140,160,180,200,240,
+       --续费人次
+       102,122,142,162,182,202,242)
+       group by  dblclick_center_id,rpt_date,rpt_year,  rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--权责销售总值（社招）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,24 as rpt_row,rpt_col+2 as rpt_col,
+           sum(case when rpt_row in (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 1 and rpt_type=1 and kpi_type=1  and kpi_name in ('扣减销售总值','划出学费总值','后期学费优惠总额') )
+                    then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '权责销售总值' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=1
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       --线下班
+             and rpt_row in (132,143,154,165,176,187,198,209,220,231,242,253,264,275,286,297,308,319,330,341,352,363,374,385,396,407,418,429,440,451,
+       --线上班+复购
+             507,518,529,540,551,562,573,584,595,606,
+       --增值收入
+       94,96,97,98,
+       --中心划转 有效转无效 无效转有效 后期优惠总值
+             108,113,125,128,120)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--权责销售总值（渠道）
+/**
+修改内容:2020-05-27 公式增加复购课程指标值
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,25 as rpt_row,rpt_col+2 as rpt_col,
+           sum(case when rpt_row in (select kpi_row from RPT_MON_KPI_RULE_2020  where  center_type= 2 and rpt_type=1 and kpi_type=1  and (kpi_name='扣减销售总值' or kpi_name='划出学费总值' or kpi_name='后期学费优惠总额') )
+                    then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '权责销售总值' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=2
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       --就业班
+             and rpt_row in (148,159,170,181,192,203,214,225,236,247,258,269,280,291,302,313,324,335,
+       --孵化班
+             358,369,380,391,402,413,424,435,446,457,468,479,490,501,512,523,534,545,
+       --复购、共建
+             568,579,590,601,612,623,634,645,656,667,678,689,700,711,722,733,744,755,
+       778,789,800,811,822,833,877,844,855,866,
+       --增值收入
+       109,111,112,113,
+       --中心划转 有效转无效 无效转有效 后期优惠总值
+             124,129,136,141,144)
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+
+--开班现金收入总计（童程）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,25 as rpt_row,rpt_col+2 as rpt_col,
+       --这里收入来源为少儿 RPT_MON_KPI_RULE_2020 中未维护
+           sum(case when rpt_row in (116,136,156,176,216,256)
+                    then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '开班现金收入总计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where rpt_type=1 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+    --新增学费金额
+       and nvl(DBLCLICK_ROW,rpt_row)  in (101,121,141,161,201,241,
+     --续费学费金额
+     103,123,143,163,203,243,
+     --当月退费金额
+     116,136,156,176,216,256,
+     --增值收入
+     63,64,65,67,69,70 )
+       group by area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year,
+                rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+--插入收入转成本中童程在线中心和重点区域线上中心少记的帮招和双记中心(童程开班现金收入)
+--其中offline_db_type是为了导出成本集团合并时 去除该部分标识的数据 (避免帮招部分重复)
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row,offline_db_type)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row,1 as offline_db_type
+from(
+
+     select
+      (select parent_id from mdm_center where id = f.dblclick_center_id) as area_id
+      ,(select name from mdm_center where id = (select parent_id from mdm_center where id = f.dblclick_center_id)) as area_name
+      ,(select city_id from mdm_center where id = f.dblclick_center_id) as city_id
+      ,(select name from mdm_city where id = (select city_id from mdm_center where id = f.dblclick_center_id)) as city_name
+     ,dblclick_center_id as center_id
+    , (select name from mdm_center where id = dblclick_center_id) as center_name
+      ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=dblclick_center_id  and rownum=1) AS  center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,25 as rpt_row,rpt_col+2 as rpt_col,
+       --这里收入来源为少儿 RPT_MON_KPI_RULE_2020 中未维护
+           sum(case when rpt_row in (116,136,156,176,196,216,256)
+                    then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '开班现金收入总计' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run f
+       where rpt_type=1 and center_type=3
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and dblclick_center_id is not null
+    --新增学费金额
+       and
+       DBLCLICK_ROW  in  (101,121,140,161,181,201,241,
+     --续费学费金额
+     103,123,143,163,183,203,243,
+     --当月退费金额
+   116,136,156,176,196,216,256,
+     --增值收入
+     63,64,65,67,69,70 )
+       group by  dblclick_center_id,rpt_date,rpt_year,  rpt_month,rpt_type,rpt_col
+
+);
+commit;
+
+--在校线下班人数（社招）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,
+       19 as rpt_row,rpt_col+2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '线下班人数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=1 and center_type=1
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='线下班人数');
+
+commit;
+
+
+--在校线上班人数（社招）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,20 as rpt_row,rpt_col+2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '线上班人数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=1 and center_type=1
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 1 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='线上班人数');
+
+commit;
+
+
+--在校就业班人数（渠道）
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,20 as rpt_row,rpt_col+2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '就业班人数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=1 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='就业班人数');
+
+commit;
+
+
+--在校孵化及共建班人数(渠道)
+/**
+修改时间:2020-04-26
+修改内容:由原来的的直接从基础数据获取 改为 通过收入转成本表间公式
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,rpt_date,rpt_year, rpt_month,
+           2 as rpt_type,21 as rpt_row,rpt_col+2 as rpt_col,nvl(rpt_value,0) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '就业班人数' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+from rpt_mon_run
+where rpt_type=1 and center_type=2
+     and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+   and rpt_version = '2020V1'
+     and rpt_row = (select KPI_ROW from RPT_MON_KPI_RULE_2020 r
+      where r.center_type= 2 and r.rpt_type=1 and r.kpi_type=1 and r.kpi_name='孵化及共建班人数');
+
+commit;
+
+
+  --**********************************************总部合并收入************************************
+
+--总部合并，这里将center_type 的值设置为4作为取总部合并的标识
+
+--高强时代软件项目【渠道】
+/**
+创建时间:2020-05-18
+创建人:qc
+内容描述：该部分收入为总部下的 软件项目中心 的现金收入
+*/
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 3 as rpt_row,
+           sum(case when rpt_row in (142,892,894) then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并高强时代软件项目' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id = 3934
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+       --渠道模板的现金收入总计公式
+             and rpt_row in (23,24,25,26,27,28,109,111,112,113,114,142,145,889,890,892,893,894,895)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--金融机构返点【总部合并包含的所有中心除软件项目外】
+/**
+创建时间:2020-05-18
+创建人:qc
+内容描述：该部分收入其他缴费中缴费用途为金融机构服务费 且中心为总部包含中心(去除软件项目中心)
+*/
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month, rpt_type,
+  rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code, rpt_row_name, dblclick,
+   dblclick_center_id, dblclick_row)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       1 as rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,
+       '2020V1' as rpt_version, null rpt_row_code,
+       rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+from(
+
+     select to_number(TO_CHAR(MDATE, 'yyyy')) as rpt_year
+          ,to_number(TO_CHAR(MDATE, 'MM')) as rpt_month
+          ,area_id,area_name, city_id, city_name,center_id,center_name,center_type
+          ,'金融机构返点' as rpt_row_name
+      ,4 as rpt_row
+          ,rpt_value
+       from(
+          select area_id,(select name from mdm_center where id=mm.area_id) area_name,
+          city_id, (select name from mdm_city where id=mm.city_id) city_name,
+          center_id,(select name from mdm_center where id=mm.center_id) center_name,
+          4 as center_type,
+          sum(nvl(adjust_money,0)) as rpt_value
+
+          from va_other_pay mm
+          where  (app_state=11 and create_time>=to_date('2020/1/1','yyyy/mm/dd') and create_time<  trunc(MDATE)+1
+          and  app_date >= case when to_number(TO_CHAR(MDATE, 'MM'))=1 then trunc(MDATE,'mm') else trunc(MDATE,'mm')+0.5 end
+          and app_date < trunc(MDATE)+1.5 and center_id in (100,1937,1939,852,3935,4033,2634,2633,1938) and used = '0128')
+          or(app_state=11 and create_time >=  trunc(MDATE,'mm') and  app_date < trunc(MDATE,'mm')+0.5 and  center_id in (100,1937,1939,852,3935,4033,2634,2633,1938) and used = '0128')
+          group by area_id, city_id,center_id
+       )t
+
+);
+commit;
+
+--其他收入(社招)（现金收入总计）
+/**
+创建时间:2020-05-18
+创建人:qc
+内容描述：该部分收入总部包含中心的现金收入总计(中心业务分类为社招)
+
+*/
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 5 as rpt_row,
+           sum(case when rpt_row in (126,621,623) then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并其他收入社招' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+     --后续通过字典配置
+       where center_id in (100,1937,5214,1938,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+       --社招模板的现金收入总计公式
+             and rpt_row in (94,96,97,98,23,24,25,26,27,126,129,618,619,621,622,623,624)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+
+--其他收入【渠道】
+/**
+创建时间:2020-05-18
+创建人:qc
+内容描述：该部分收入为总部下的 渠道 的现金收入 （软件项目）
+*/
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 5 as rpt_row,
+           sum(case when rpt_row in (142,892,894) then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并其他收入渠道' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in  (4033,3935,5213)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+       --渠道模板的现金收入总计公式
+             and rpt_row in (23,24,25,26,27,28,109,111,112,113,114,142,145,889,890,892,893,894,895)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--其他收入 【童程】
+/**
+创建时间:2020-05-18
+创建人:qc
+内容描述：该部分收入为总部包含中心的现金收入总计(中心业务分类为童程)
+
+*/
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 5 as rpt_row,
+           sum(case when rpt_row = 126 then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并其他收入童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+     --后续通过字典配置
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+       --k12模板的现金现金流销售总值
+             and rpt_row = 5
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+
+--手动更新将其他收入的值减去 金融机构返点 的值
+update rpt_mon_run r set rpt_value =  rpt_value - nvl((select sum(nvl(rpt_value,0)) from rpt_mon_run
+                          where center_id = r.center_id and rpt_row = 4
+                          and rpt_year = r.rpt_year
+                          and rpt_month = r.rpt_month
+                          and rpt_version = '2020V1'
+                          and rpt_date = r.rpt_date
+                          and rpt_type = 1
+                          and center_type = 4),0)
+    where center_type = 4 and rpt_type = 1 and   rpt_row = 5
+      and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+    and rpt_version = '2020V1'
+    and center_id in (100,1937,1939,852,3935,4033,2634,2633,1938);
+commit;
+
+--运营成本 【社招+渠道】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 6 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并运营成本成人' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,3935,3934,4033,5213,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =10
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+
+
+--运营成本 【童程】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 6 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并运营成本童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =13
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--员工总数 【社招+渠道】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 9 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并员工总数成人' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,3935,3934,4033,5213,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =29
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--员工总数 【童程】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 9 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并员工总数童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =33
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 工资+奖金 【社招】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 30 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并工资奖金社招' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row in (645,646)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 工资+奖金 【渠道】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 30 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并工资奖金渠道' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (3935,3934,4033,5213)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row in (905,906)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 工资+奖金 【童程】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 30 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并工资奖金童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row in (338,339)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--增值税及附加【社招】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 11 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并增值税及附加社招' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =101
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--增值税及附加【渠道】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 11 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并增值税及附加渠道' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (3935,3934,4033,5213)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =117
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--增值税及附加【童程】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 11 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并增值税及附加童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =74
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--所得税【社招】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 13 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并所得税社招' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =103
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--所得税【渠道】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 13 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并所得税渠道' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (3935,3934,4033,5213)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =119
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--所得税【童程】
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 13 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并所得税童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+             and rpt_row =76
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 权责收入【社招】取自月报中成本的权责销售总值，上面的表间公式已做计算
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 31 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并权责收入社招' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (100,1937,1938,5214,3793,3833)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 2
+             and rpt_row = 24
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 权责收入【渠道】取自月报中成本的权责销售总值，上面的表间公式已做计算
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 31 as rpt_row,
+           sum(nvl(rpt_value,0)) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并权责收入渠道' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+       where center_id in (3935,3934,4033,5213)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 2
+             and rpt_row = 25
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+--辅助行 权责收入【童程】 取自童程收入的会计销售公式
+
+insert into rpt_mon_run
+  (center_id,center_type, rpt_date, rpt_year, rpt_month,
+  rpt_type, rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code,
+  rpt_row_name, dblclick, dblclick_center_id, dblclick_row)
+
+select center_id, center_type,rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,3+rpt_month as rpt_col, rpt_value,rpt_row_type,rpt_row_show,create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row
+from(
+
+     select center_id,4 as center_type,rpt_date,rpt_year, rpt_month,
+           1 as rpt_type, 31 as rpt_row,
+           sum(case when rpt_row = 126 then 0-nvl(rpt_value,0) else nvl(rpt_value,0) end) as rpt_value
+           ,1 as rpt_row_type,1 as rpt_row_show,sysdate as create_time,'2020V1' as rpt_version,null as rpt_row_code,
+           '总部合并权责收入童程' as rpt_row_name,null as dblclick, null as dblclick_center_id, null as dblclick_row
+
+       from rpt_mon_run
+     --后续通过字典配置
+       where center_id in (2634,2633)
+             and rpt_year = to_number(to_char(mdate,'yyyy')) and rpt_month = to_number(to_char(mdate,'MM'))
+       and rpt_version = '2020V1'
+       and rpt_type = 1
+       --k12模板的会计销售总值公式
+             and nvl(DBLCLICK_ROW,rpt_row) in (114,134,154,174,214,254,
+      63,64,65,66,68,70,
+      117,137,157,177,217,257)
+     group by center_id,center_type,rpt_date,rpt_year, rpt_month,rpt_type
+);
+commit;
+
+
+END ;

@@ -1,0 +1,105 @@
+CREATE OR REPLACE PROCEDURE  rpt_mon_run_proc_2020( mdate date)
+AS
+
+ /*
+  作者：qc
+  创建时间：2020/5/11
+  修改人：qc
+  修改时间：2020-06-15增加2019年现金规则 的存储过程调用 rpt_mon_cash_proc_2019 rpt_mon_stu_proc_2019
+  参数描述:
+  功能描述:年报存储过程汇总
+ */
+
+BEGIN
+
+--生成附表数据
+
+   rpt_mon_stu_proc_2020(mdate);--月报招生明细
+
+   rpt_mon_dis_proc_2020(mdate);--月报优惠明细
+
+   rpt_mon_cash_proc_2020(mdate);--月报现金收入
+
+   rpt_mon_stu_proc_2019(mdate);--2019现金明细
+
+   rpt_mon_cash_proc_2019(mdate);--2019招生明细
+
+   rpt_mon_cut_proc_2020(mdate);--月报扣减明细
+
+   rpt_mon_back_proc_2020(mdate);--月报扣减找回
+
+
+
+
+
+--删除主表参数年、参数月的数据
+/**
+修改时间:2020-05-11
+修改内容:增加版本条件限制 rpt_version = '2020V1'
+*/
+
+   delete from rpt_mon_run
+          where rpt_year=to_number(to_char(mdate,'yyyy')) and  rpt_month=to_number(to_char(mdate,'mm'))
+                and (rpt_row_name != 'excel' or rpt_row_name is null) and rpt_version = '2020V1';
+
+   commit;
+
+--生成主表数据
+
+   --rpt_mon_guimo_run_proc(mdate);--向月支出插入面积、教室数、座位数
+
+   rpt_mon_cost_run_proc_2020(mdate);--成本数据
+
+   rpt_mon_rev_run_proc_2020(mdate);--收入数据
+
+   rpt_mon_run_k12rev_proc_2020(mdate);--童程数据
+
+   rpt_mon_math_run_proc_2020(mdate);--补充数据
+
+   commit;
+
+   rpt_consult_rank_proc_2020(mdate);--咨询顾问总评榜
+
+   commit;
+
+   --处理科学计数法显示的数字
+   delete from  RPT_MON_RUN
+   where rpt_value>=-0.0001 and rpt_value<0.0001 and length(rpt_value)-instr(rpt_value,'.')>1;
+   commit;
+
+   delete from  RPT_MON_RUN
+   where rpt_value is null or rpt_value=0 or rpt_row is null;
+   commit;
+
+   delete from  RPT_MON_cut
+   where cut_money>=-0.0001 and cut_money<0.0001 and length(cut_money)-instr(cut_money,'.')>1;
+   commit;
+
+   delete from  RPT_MON_cut
+   where cut_money is null;
+   commit;
+
+   delete from  RPT_MON_back
+   where back_money>=-0.0001 and back_money<0.0001 and length(back_money)-instr(back_money,'.')>1;
+   commit;
+
+   delete from  RPT_MON_back
+   where back_money is null;
+   commit;
+
+   --统一中心属性
+   update rpt_mon_run t
+   set t.center_type=(select work_type from mdm_center where id=t.center_id)
+   where rpt_year=to_number(to_char(mdate,'yyyy')) and  rpt_month=to_number(to_char(mdate,'mm')) and rpt_version = '2020V1'
+   and center_type !=4;
+   commit;
+
+   --统一中心和区域对应关系
+   update rpt_mon_run t
+   set t.area_id=(select parent_id from mdm_center where id=center_id),
+       t.area_name=(select name from mdm_center where id=(select  parent_id from mdm_center c where c.id=t.center_id))
+   where rpt_year=to_number(to_char(mdate,'yyyy')) and  rpt_month=to_number(to_char(mdate,'mm')) and rpt_version = '2020V1';
+   commit;
+
+
+END ;

@@ -1,0 +1,302 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_stu_proc_2020(MDATE IN DATE DEFAULT sysdate)
+is
+
+BEGIN
+ /*
+  作者：qc
+  创建时间：2020-05-11
+  修改时间:2020-05-11
+  修改内容： 修改版本为'2020V1'，删除时增加版本条件
+  功能描述:月报招生明细
+ */
+
+
+ /*
+ 复购课程:
+            BIGV 、BIGO开头的班级且学费总值<2万的计入复购课程；其他的计入社招就业班/渠道就业班
+            CID 、GCA  、BCT  、ACT 、WDS  、BOS  全部计入复购，不区分班型
+     月报位置：
+            BIGV 、BIGO开头、BOS 课程   数据列入月报BOS课程行
+
+
+ */
+
+--校验入参是否为月末最后一天
+if MDATE = add_months(trunc(MDATE,'mm'),1)-1 then
+--删除指定月数据
+delete from rpt_mon_stu where  RPT_DATE>=trunc(MDATE,'mm') and RPT_DATE<trunc(MDATE)+1 and rpt_version = '2020V1';
+commit;
+
+--插入指定月数据
+ /*
+  修改人：qc
+  修改时间：2020/4/5
+  修改内容:区分1、2 月份和3月及以后月报，3月月报开始去除联合招生，均取自学员的销售中心,取学员的team_center_id 作为联合招生中心
+  修改时间:2020/4/16
+  修改内容:区分专业共建(系列班级类型的学习方式为共建)，已缴学费区分自筹和贷款,CADOT和CAD区分单独作为一个课程方向
+       增加其中线上标识,online_flag 为1 则为其中线上 :规则为就业班中且系列班前5位的后两位为OT(除CADOT外)
+  修改内容：社招去除线上班，CADOT不单独做区分，
+      增加脱产线上标识 tn_online_flag:系列班的学习方式为'T'，且学员的live_permission字段值为 183101
+      增加学习方式 learn_style ，online_flag 取值取消去除CADOT条件
+  修改内容:2020-05-31 vip判断方式 由原来的的vip_style is not null  改为学习方式='V'
+  修改内容:2020-09-21 来自信息量T报名的学员招生人数计入渠道（即信息量录入中心）
+ */
+
+--这里为2020年1、2月份招生明细取值逻辑（以联合招生中心作为中心取数，在月报中单独加上该部分）
+if (to_number(TO_CHAR(mdate, 'yyyy'))=2020 and to_number(TO_CHAR(mdate, 'MM')) in (1,2)) then
+
+  insert into rpt_mon_stu
+    (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name, source_stu,
+    series_class_id, series_class_name, class_type, class_direction,online_flag, tn_online_flag,learn_style,stu_num, payment, source_fund, fee, pay_fee,zc_pay_fee, dk_pay_fee,
+    discount_fee, due_fee, is_part, target, tel_target, own_id, own_name, own_email, share_own_id, share_own_name,
+     share_own_email, create_time, rpt_version,vip_type,TEAM_CENTER_ID,TEAM_CENTER_NAME,INFO_SOURCE,INFO_CHANNEL,school_name
+    ,CREATE_AREA_ID, CREATE_AREA_NAME)
+
+  select
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+         then (select parent_id from mdm_center where id=TEAM_CENTER_ID)
+         else area_id end as area_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+         then (select name from mdm_center where id=(select parent_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+         else area_name end as area_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+         then (select city_id from mdm_center where id=TEAM_CENTER_ID)
+         else city_id end as city_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+         then (select name from mdm_city where id=(select city_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+         else city_name end as city_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_ID
+         else center_id end as center_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_name
+         else center_name end as center_name,
+
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+         then (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.TEAM_CENTER_ID  and rownum=1)
+         else (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) end as center_type,
+      rpt_date, stu_id, stu_name,
+    case when  center_type = 1 then 1031 when center_type = 2 then 1032 else source_stu end as source_stu,
+      series_class_id, series_class_name
+      ,case when num>0 or ((v_big>0 or o_big>0) and nvl(fee,0)<20000) then '复购班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=1 then '就业班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE='T' then '就业班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE='G' then '专业共建'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE not in ('T','G') then '孵化班'
+       end as class_type
+      ,(select course.short_name from mdm_course course where course.code= substr(proc_code,1,3))  as class_direction
+    ,case when (instr(substr(proc_code,4,5),'OT') >0) then 1 else 0 end as online_flag
+    ,case when LEARN_STYLE = 'T' and live_permission = '183101' then 1 else 0 end  as tn_online_flag
+    ,(select name from mdm_dic_option where dic_code = 'pm_ product_001' and code = tt.learn_style) as learn_style
+    ,nvl(target,1)*nvl(tel_target,1)*1 as stu_num, payment
+      ,case when LOANS_TYPE is null then '459' else LOANS_TYPE end as source_fund
+      ,case when center_type=1 then nvl(fee,0)*nvl(target,1)*nvl(tel_target,1)*1 else one_fee end as fee
+      ,pay_fee,zc_pay_fee, dk_pay_fee,discount_fee
+      ,case when (nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0)) < 0
+        then 0-(nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0))
+        else (nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0))
+       end as due_fee
+      ,case when (num_HRM>0 and PERIOD_MONTH<2) or (num_HRM<=0 and PERIOD_MONTH<3) then '1' else '2' end as is_part
+      ,target,nvl(tel_target,1) as tel_target, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+        then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+        else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+        then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+        else null
+       end as share_own_email
+      ,sysdate create_time,'2020V1' rpt_version
+    ,case when LEARN_STYLE = 'V' then 1 else null end as vip_type,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_ID
+         else TEAM_CENTER_ID end as TEAM_CENTER_ID,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_name
+         else TEAM_CENTER_name end as TEAM_CENTER_name
+      ,INFO_SOURCE,INFO_CHANNEL,school_name,area_id as CREATE_AREA_ID,area_name as CREATE_AREA_NAME
+
+  from(
+
+    select
+    create_area_id as area_id,(select name from mdm_center where id=create_area_id) as area_name,create_city_id as city_id
+    ,(select name from mdm_city city where city.id = mm.create_city_id) as city_name
+    ,create_center_id as center_id,(select name from mdm_center where id = mm.create_center_id ) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.create_center_id  and rownum=1) as center_type
+    ,add_months(trunc(report_date,'mm'),1)-1 as rpt_date,id as stu_id,stu_name as stu_name,
+    source_stu as source_stu
+    ,(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as series_class_id
+    ,(select class_name from ca_class where id = (select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1 ) ) as series_class_name
+    ,(select instr('CIDACTGCABCTWDSBOSJSAGCACUTFEE',substr(series_class_name,1,3)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as num
+    ,(select instr('BIGV',substr(series_class_name,1,4)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as v_big
+    ,(select instr('BIGO',substr(series_class_name,1,4)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as o_big
+    ,(select LEARN_STYLE from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11')) as LEARN_STYLE
+    ,(select proc_code from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1)) as proc_code
+    ,(select RPT_PAYMENT from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11') payment
+    ,(select LOANS_TYPE from stu_loans where EFFECTIVE_LOAN_STATE = 2 and stu_id = mm.id and rownum=1) as LOANS_TYPE
+    ,(select sum(nvl(rpt_money,0)) from cont_c_info where HT_SUB_TYPE = '1001' and stu_id = mm.id and APP_STATE='11') as fee
+    ,(select sum(nvl(ACTUAL_ONCE_MONEY ,nvl(RPT_MONEY,0))) from cont_c_info  where HT_SUB_TYPE='1001' and stu_id=mm.id )  as one_fee
+    ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1)) as pay_fee
+  ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1) and payment in (280,297,298,285,287,1,305,282,283,284,2,315)) as zc_pay_fee
+  ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1) and payment not in (280,297,298,285,287,1,305,282,283,284,2,315)) as dk_pay_fee
+    ,(select sum(nvl(MONEY,0)) from cont_c_discount where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1)) as discount_fee
+    ,(select instr(proc_code,'HRM') from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1)) as num_HRM
+    ,(select PERIOD_MONTH from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11') as PERIOD_MONTH
+    ,( select (select nvl(to_number( replace( name,'%','') ),0) /100   from mdm_dic_option where dic_code='cont_c_result_target'
+     and  mc. TARGET=code )  from cont_c_info mc  where  stu_id=mm.id and  HT_SUB_TYPE='1001' and HT_TYPE=1 ) as TARGET
+    ,(select TEL_TARGET from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as TEL_TARGET
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,TEAM_CENTER_ID,(select name from mdm_center where id = mm.TEAM_CENTER_ID) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=mm.information_id)) INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=mm.information_id) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=mm.information_id)) INFO_CHANNEL
+    ,mm.school_name,live_permission
+    from stu_info  mm
+    where REPORT_state = '11'
+      and REPORT_DATE >= trunc(MDATE,'mm')
+      and REPORT_DATE < trunc(MDATE)+1
+  ) tt;
+  commit;
+
+  --2020年3月及以后的招生明细取值逻辑（联合招生以中心收入划分的方式体现）
+  else
+
+  insert into rpt_mon_stu
+    (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name, source_stu,
+    series_class_id, series_class_name, class_type, class_direction,online_flag,tn_online_flag,learn_style, stu_num, payment, source_fund, fee, pay_fee,zc_pay_fee, dk_pay_fee,
+    discount_fee, due_fee, is_part, target, tel_target, own_id, own_name, own_email, share_own_id, share_own_name,
+     share_own_email, create_time, rpt_version,vip_type,INFO_SOURCE,INFO_CHANNEL,school_name
+    ,CREATE_AREA_ID, CREATE_AREA_NAME ,TEAM_CENTER_ID,TEAM_CENTER_NAME,flag)
+
+  select
+		--中心、城市、区域取值判断是否为T量和时间(2020-09)
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (select parent_id from mdm_center where id = tt.information_center_id) else area_id end as area_id,
+       case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (select name from mdm_center where id = (select parent_id from mdm_center where id = tt.information_center_id)) else area_name end as area_name,
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (select city_id from mdm_center where id = tt.information_center_id) else city_id end as city_id,
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (select name from mdm_city where id = (select city_id from mdm_center where id = tt.information_center_id)) else city_name end as city_name,
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then information_center_id else center_id end as center_id,
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (select name from mdm_center where id = tt.information_center_id) else center_name end as center_name,
+	   case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and information_center_id is not null and information_center_id != center_id 
+			then (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.information_center_id  and rownum=1) else (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) end as center_type,
+      rpt_date, stu_id, stu_name,
+    case when  center_type = 1 then 1031 when center_type = 2 then 1032 else source_stu end as source_stu,
+      series_class_id, series_class_name
+      ,case when num>0 or ((v_big>0 or o_big>0) and nvl(fee,0)<20000) then '复购班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=1 then '就业班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE='T' then '就业班'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE='G' then '专业共建'
+        when (num<=0 and ((v_big<=0 or o_big<=0) or ((v_big>0 or o_big>0) and nvl(fee,0)>=20000))) and center_type=2 and LEARN_STYLE not in ('T','G') then '孵化班'
+        end as class_type
+    ,(select course.short_name from mdm_course course where course.code= substr(proc_code,1,3)) as class_direction
+    ,case when (instr(substr(proc_code,4,5),'OT') >0) then 1 else 0 end as online_flag
+    ,case when LEARN_STYLE = 'T' and live_permission = '183101' then 1 else 0 end  as tn_online_flag
+    ,(select name from mdm_dic_option where dic_code = 'pm_ product_001' and code = tt.learn_style) as learn_style
+       ,nvl(target,1)*nvl(tel_target,1)*1 as stu_num, payment
+      ,case when LOANS_TYPE is null then '459' else LOANS_TYPE end as source_fund
+      ,case when center_type=1 then nvl(fee,0)*nvl(target,1)*nvl(tel_target,1)*1 else one_fee end as fee
+      ,pay_fee,zc_pay_fee, dk_pay_fee,discount_fee
+      ,case when (nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0)) < 0
+        then 0-(nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0))
+        else (nvl(fee,0)-nvl(pay_fee,0)-nvl(discount_fee,0))
+       end as due_fee
+      ,case when (num_HRM>0 and PERIOD_MONTH<2) or (num_HRM<=0 and PERIOD_MONTH<3) then '1' else '2' end as is_part
+      ,target,nvl(tel_target,1) as tel_target, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+        then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+        else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+        then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+        else null
+       end as share_own_email
+      ,sysdate create_time,'2020V1' rpt_version
+	  ,case when LEARN_STYLE = 'V' then 1 else null end as vip_type
+      ,INFO_SOURCE,INFO_CHANNEL,school_name
+      ,area_id as CREATE_AREA_ID,area_name as CREATE_AREA_NAME
+	  ,case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and center_type = 1 and information_center_id is not null and information_center_id != center_id 
+			then center_id end as TEAM_CENTER_ID
+	  ,case when mdate >= to_date('2020-09-01','yyyy-mm-dd') and center_type = 1 and information_center_id is not null and information_center_id != center_id 
+			then center_name end as TEAM_CENTER_NAME
+      ,1
+
+  from(
+
+    select
+    create_area_id as area_id,(select name from mdm_center where id=create_area_id) as area_name,create_city_id as city_id
+    ,(select name from mdm_city city where city.id = mm.create_city_id) as city_name
+    ,create_center_id as center_id,(select name from mdm_center where id = mm.create_center_id ) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.create_center_id  and rownum=1) as center_type
+    ,add_months(trunc(report_date,'mm'),1)-1 as rpt_date,id as stu_id,stu_name as stu_name,
+    source_stu as source_stu
+    ,(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as series_class_id
+    ,(select class_name from ca_class where id = (select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1 ) ) as series_class_name
+    ,(select instr('CIDACTGCABCTWDSBOSJSAGCACUTFEE',substr(series_class_name,1,3)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as num
+    ,(select instr('BIGV',substr(series_class_name,1,4)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as v_big
+    ,(select instr('BIGO',substr(series_class_name,1,4)) from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as o_big
+    ,(select LEARN_STYLE from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11')) as LEARN_STYLE
+    ,(select proc_code from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1)) as proc_code
+    ,(select RPT_PAYMENT from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11') payment
+    ,(select LOANS_TYPE from stu_loans where EFFECTIVE_LOAN_STATE = 2 and stu_id = mm.id and rownum=1) as LOANS_TYPE
+    ,(select sum(nvl(rpt_money,0)) from cont_c_info where HT_SUB_TYPE = '1001' and stu_id = mm.id and APP_STATE='11') as fee
+    ,(select sum(nvl(ACTUAL_ONCE_MONEY ,nvl(RPT_MONEY,0))) from cont_c_info  where HT_SUB_TYPE='1001' and stu_id=mm.id )  as one_fee
+    ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1)) as pay_fee
+  ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1) and payment in (280,297,298,285,287,1,305,282,283,284,2,315)) as zc_pay_fee
+  ,(select sum(nvl(ADJUST_MONEY,0)) from cont_c_pay where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1) and payment not in (280,297,298,285,287,1,305,282,283,284,2,315)) as dk_pay_fee
+    ,(select sum(nvl(MONEY,0)) from cont_c_discount where stu_id=mm.id and APP_STATE='11' and APP_DATE< add_months(trunc(mm.REPORT_DATE,'mm'),1)) as discount_fee
+    ,(select instr(proc_code,'HRM') from ca_class where id=(select series_class_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1)) as num_HRM
+    ,(select PERIOD_MONTH from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11') as PERIOD_MONTH
+    ,( select (select nvl(to_number( replace( name,'%','') ),0) /100   from mdm_dic_option where dic_code='cont_c_result_target'
+     and  mc. TARGET=code )  from cont_c_info mc  where  stu_id=mm.id and  HT_SUB_TYPE='1001' and HT_TYPE=1 ) as TARGET
+    ,(select TEL_TARGET from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as TEL_TARGET
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,TEAM_CENTER_ID,(select name from mdm_center where id = mm.TEAM_CENTER_ID) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=mm.information_id)) INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=mm.information_id) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=mm.information_id)) INFO_CHANNEL
+    ,mm.school_name,live_permission
+	,(select create_center_id  from sale_info where id = mm.information_id and info_type = 4) as information_center_id
+    from stu_info  mm
+    where REPORT_state = '11'
+      and REPORT_DATE >= trunc(MDATE,'mm')
+      and REPORT_DATE < trunc(MDATE)+1
+  ) tt;
+  commit;
+
+end if;
+
+
+--BIGV 、BIGO 开头、BOS 课程   数据列入月报BOS课程行
+
+update rpt_mon_stu s
+set s.class_direction='大数据+实战高薪'
+where s.class_type='复购班'
+      and s.class_direction='大数据课程'
+      and (instr('BIGO',substr(series_class_name,1,4))>0 or instr('BIGV',substr(series_class_name,1,4))>0)
+      and rpt_date >=trunc(MDATE,'mm') and  rpt_date<trunc(MDATE)+1;
+
+commit;
+
+update rpt_mon_stu
+set area_id=(select parent_id from mdm_center where id=center_id)
+where area_id is null;
+
+commit;
+
+update rpt_mon_stu
+set area_name=(select name from mdm_center where id=area_id)
+where area_name is null;
+
+commit;
+
+
+end if;
+
+END;

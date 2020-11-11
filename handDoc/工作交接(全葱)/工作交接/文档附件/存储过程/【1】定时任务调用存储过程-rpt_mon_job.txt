@@ -1,0 +1,100 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_job
+AS
+/*
+  作者：zhx
+  创建时间：2019/2/28
+  修改人：
+  修改时间：
+  参数描述:
+  功能描述:月报锁定-2日至月报锁定日（含），每半小时执行一次，其他时间一天一次
+  修改内容: 2020-07-14 取消刷新2019V1版本月报
+  修改内容: 2020-07-17 调整最后刷新月报时间由原半小时为锁月报后1小时，原因少儿同步中间表数据可能超过半小时
+  修改内容: 2020-11-09 应运营老师要求，月报锁定日当天，每半小时刷新一次月报
+ */
+
+ mdate date;--当月
+
+ mlockdate date;
+
+ hour varchar2(256);
+
+BEGIN
+--获取锁月报时间年月日
+select trunc(sysdate,'mm')+to_number( name)-1 into mlockdate   from mdm_dic_option where code='monthReportDate' and dic_code='system_set_001';
+--获取锁月报时间年月日 时分秒 
+select mlockdate+substr(name,1,instr(name,':','1','1')-1)/24 into mlockdate from mdm_dic_option where code='monthReportTime' and dic_code='system_set_001';
+select substr(name,1,2) into hour from mdm_dic_option where code='monthReportTime' and dic_code='system_set_001';
+
+if  trunc(mlockdate) =trunc(sysdate) then
+
+    if to_char(sysdate,'hh24') = hour and (to_char(sysdate,'mi') = '00' or to_char(sysdate,'mi') = '01' or to_char(sysdate,'mi') = '02') then
+      --将未审批的成本划分状态更改为审批通过
+    rpt_month_manage_proc_lock();
+    --向月支出插入面积、教室数、座位数
+    rpt_mon_guimo_run_proc(trunc(sysdate,'mm')-1);
+    --刷新 月报 
+    rpt_mon_run_proc_2020 (trunc(sysdate,'mm')-1);
+
+    end if;
+    commit;
+
+    --锁月报后1小时刷新最后一次刷新月报(主要为舒心同步的童程数据)
+    if to_char(sysdate,'hh24') = (to_number(hour)+1) and (to_char(sysdate,'mi') = '00' or to_char(sysdate,'mi') = '01' or to_char(sysdate,'mi') = '02' ) then
+      --rpt_mon_run_proc (trunc(sysdate,'mm')-1);
+    rpt_mon_run_proc_2020 (trunc(sysdate,'mm')-1);
+    end if;
+    commit;
+end if;
+commit;
+
+
+if  mlockdate-1 <= sysdate and mlockdate >= sysdate then 
+    select trunc(sysdate,'mm')-1 into mdate from dual;
+  rpt_mon_run_proc_2020(mdate);
+    DBMS_OUTPUT.PUT_LINE(mdate);
+    DBMS_OUTPUT.PUT_LINE('月报锁定当天，半小时刷新一次'); 
+    commit;
+elsif  mlockdate-1 > sysdate then
+    if to_char(sysdate,'hh24')='07' then
+       select trunc(sysdate,'mm')-1 into mdate from dual; 
+     rpt_mon_run_proc_2020(mdate);
+       DBMS_OUTPUT.PUT_LINE(mdate);
+       DBMS_OUTPUT.PUT_LINE('月报锁定前每天凌晨4点刷新上月数据');
+    end if;
+    commit;
+    if to_char(sysdate,'hh24')='12' then
+       select trunc(sysdate,'mm')-1 into mdate from dual; 
+     rpt_mon_run_proc_2020(mdate);
+       DBMS_OUTPUT.PUT_LINE(mdate);
+       DBMS_OUTPUT.PUT_LINE('月报锁定前每天中午12点刷新上月数据');
+    end if;
+    commit;
+    if to_char(sysdate,'hh24')='00' and to_char(sysdate,'dd')='01' then
+       select trunc(sysdate,'mm')-1 into mdate from dual; 
+     rpt_mon_run_proc_2020(mdate);
+       DBMS_OUTPUT.PUT_LINE(mdate);
+       DBMS_OUTPUT.PUT_LINE('月报锁定前1号00点刷新上月数据');
+    end if;
+    commit;
+
+elsif mlockdate < sysdate then
+    if to_char(sysdate,'hh24')='07' then
+       select add_months(trunc(sysdate,'mm')-1,1) into mdate from dual;
+       DBMS_OUTPUT.PUT_LINE(mlockdate);
+       DBMS_OUTPUT.PUT_LINE(mdate);
+       DBMS_OUTPUT.PUT_LINE('月报锁定后每天凌晨4点刷新下月数据'); 
+     rpt_mon_run_proc_2020(mdate);
+
+    end if;
+    commit;
+    if to_char(sysdate,'hh24')='12' then
+       select add_months(trunc(sysdate,'mm')-1,1) into mdate from dual; 
+     rpt_mon_run_proc_2020(mdate);
+       DBMS_OUTPUT.PUT_LINE(mdate);
+       DBMS_OUTPUT.PUT_LINE('月报锁定后每天中午12点刷新下月数据');
+    end if;
+    commit;
+end if;
+
+
+END ;

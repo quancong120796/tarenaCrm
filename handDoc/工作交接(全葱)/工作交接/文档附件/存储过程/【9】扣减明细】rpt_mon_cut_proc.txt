@@ -1,0 +1,153 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_cut_proc_2020(MDATE IN DATE DEFAULT sysdate)
+is
+
+
+BEGIN
+ /*
+  作者：zhx
+  创建时间：2019/1/25
+  修改人：
+  修改时间：
+  参数描述:
+  功能描述:月报扣减明细
+ */
+--校验入参是否为月末最后一天
+if MDATE = add_months(trunc(MDATE,'mm'),1)-1 then
+--删除指定月数据
+delete from rpt_mon_cut where  RPT_DATE>=trunc(MDATE,'mm') and RPT_DATE<trunc(MDATE)+1 and rpt_version = '2020V1';
+commit;
+
+--插入指定月数据
+
+insert into rpt_mon_cut
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name, source_stu,
+  series_class_id, series_class_name, class_direction, cut_money, stu_rpt_date, payment, source_fund, fee, state, own_id,
+   own_name, own_email, share_own_id, share_own_name, share_own_email, create_time, rpt_version)
+
+select  area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date
+       ,stu_id, stu_name, source_stu,
+       series_class_id, series_class_name, class_direction,
+        nvl(FEE,0)+nvl(change_fee,0)-nvl(PAY_MONEY,0)-nvl(DISCOUNT_FEE,0)-nvl(cut_money_before,0)+nvl(back_money_before,0) as  cut_money,
+       stu_rpt_date, payment
+       ,case when LOANS_TYPE is null then '自筹资金'
+             else (select name from mdm_dic_option where dic_code='stu_loans_001' and code=LOANS_TYPE) end as source_fund
+       ,fee,state, own_id,own_name
+       ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+       ,sysdate as create_time, '2020V1' as rpt_version
+
+from(
+
+  select
+     SYSDATE
+     ,add_months(trunc(mdate,'mm'),1)-1 as rpt_date
+    ,create_area_id as area_id,(select name from mdm_center where id=create_area_id) as area_name,create_city_id as city_id
+    ,(select name from mdm_city city where city.id = mm.create_city_id) as city_name
+    ,create_center_id as center_id，create_center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.create_center_id  and rownum=1) as center_type
+    ,id as stu_id,stu_name as stu_name,source_stu as source_stu,
+    series_class_id as series_class_id,series_class_name as series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select     substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,add_months(trunc(report_date,'mm'),1)-1 as stu_rpt_date
+    ,(select RPT_PAYMENT from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as payment
+    ,(select LOANS_TYPE from stu_loans where EFFECTIVE_LOAN_STATE = 2 and stu_id = mm.id and rownum=1) as LOANS_TYPE
+    ,(select sum(nvl(rpt_money,0)) from cont_c_info where HT_SUB_TYPE = '1001' and stu_id = mm.id and APP_STATE='11' and rpt_date<add_months(trunc(mdate,'mm'),1)) as fee
+    ,(select sum(nvl(rpt_money,0)) from cont_c_info where HT_SUB_TYPE = '1002' and stu_id = mm.id and APP_STATE='11' and rpt_date<add_months(trunc(mdate,'mm'),1) and mm.create_center_id=center_id) as change_fee
+    --注意日期限定
+    ,(select sum(nvl(ADJUST_MONEY,0)) from  cont_c_pay  where   stu_id=mm.id and APP_STATE='11' and REPORT_DATE<add_months(trunc(mdate,'mm'),1) ) as PAY_MONEY
+    ,(select sum(nvl(MONEY,0)) from  cont_c_discount  where   stu_id=mm.id and APP_STATE='11' and APP_DATE<add_months(trunc(mdate,'mm'),1) ) as DISCOUNT_FEE
+    --这里加了额外的版本条件和时间条件是为了满足双版本，取值不重复
+  ,(select sum(nvl(cut_money,0)) from rpt_mon_cut where stu_id=mm.id and  rpt_date<trunc(mdate,'mm')
+         and (rpt_version = '2020V1' or  rpt_date<to_date('2020/01/01','yyyy/mm/dd') )
+    ) as cut_money_before
+    --这里加了额外的版本条件和时间条件是为了满足双版本，取值不重复
+  ,(select sum(nvl(back_money,0)) from rpt_mon_back where stu_id=mm.id and BACK_TYPE='扣减找回' and rpt_date<trunc(mdate,'mm')
+    and (rpt_version = '2020V1' or  rpt_date<to_date('2020/01/01','yyyy/mm/dd') )
+  ) as back_money_before
+    ,state
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    --退学日期
+    ,(select add_months(trunc(MAX(LEAVE_DATE),'mm'),1)-1 from stu_leave_class where stu_id=mm.id and LEAVE_TYPE=2 and APP_STATE='11'
+             and app_date< trunc(mdate)+1) as LEAVE_DATE
+
+  from stu_info mm
+  where REPORT_DATE   is  not null
+        and
+        id in(
+
+        select stu_id from cont_c_info  where HT_SUB_TYPE='1001'
+          and  RPT_PAYMENT in('23','24') and RPT_DATE>=trunc(add_months(mdate,-1),'mm')  and RPT_DATE< trunc(mdate,'mm')
+
+        union all
+
+        select stu_id from cont_c_info  where HT_SUB_TYPE='1001'
+          and  RPT_PAYMENT not in('23','24') and RPT_DATE>=add_months(trunc(mdate,'mm'),-6)  and RPT_DATE< add_months(trunc(mdate,'mm'),-5)
+
+        union all
+
+        select stu_id from  stu_leave_class where app_state=11 and leave_type=2
+        and  app_DATE>=trunc(mdate,'mm') and app_DATE< trunc(mdate)+1
+
+        union all
+
+        select stu_id from cont_c_pay where APP_STATE='11'
+        and REPORT_DATE>=trunc(mdate,'mm') and REPORT_DATE<add_months(trunc(mdate,'mm'),1)
+
+        union all
+
+        select stu_id from cont_c_discount where APP_STATE='11'
+        and APP_DATE>=trunc(mdate,'mm') and APP_DATE<add_months(trunc(mdate,'mm'),1)
+
+        union all
+
+        select stu_id from cont_c_info where APP_STATE='11' and HT_SUB_TYPE = '1002'
+        and rpt_DATE>=trunc(mdate,'mm') and rpt_DATE<add_months(trunc(mdate,'mm'),1)
+
+        )
+) where nvl(FEE,0)+nvl(change_fee,0)-nvl(PAY_MONEY,0)-nvl(DISCOUNT_FEE,0)-nvl(cut_money_before,0)+nvl(back_money_before,0)>0
+and (
+   (center_type = 1 and
+      (
+       (payment in ('23','24') and  stu_rpt_date < trunc(mdate,'mm') )
+       or
+       ( payment in ('25','26')  and  nvl(LEAVE_DATE, add_months(stu_rpt_date,6))<add_months(trunc(mdate,'mm'),1))
+     )
+   )
+   or
+   (center_type = 2 and LEAVE_DATE is not null and LEAVE_DATE<add_months(trunc(mdate,'mm'),1))
+);
+commit;
+
+
+update rpt_mon_cut
+set area_id=(select parent_id from mdm_center where id=center_id)
+where area_id is null;
+
+commit;
+
+update rpt_mon_cut
+set area_name=(select name from mdm_center where id=area_id)
+where area_name is null;
+
+commit;
+
+delete from rpt_mon_cut t
+where t.rpt_date>=to_date('2019/5/1','yyyy/mm/dd') and rpt_date<to_date('2019/6/1','yyyy/mm/dd')
+and stu_id in (8927366,8954843,8969429,8972917);
+
+commit;
+
+
+end if;
+
+END;

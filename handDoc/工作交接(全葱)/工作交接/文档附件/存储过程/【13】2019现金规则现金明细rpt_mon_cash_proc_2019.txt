@@ -1,0 +1,630 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_cash_proc_2019(MDATE IN DATE DEFAULT sysdate)
+is
+
+BEGIN
+ /*
+  作者：qc
+  创建时间：2020-06-15
+    内容：2019现金规则明细
+    教学中心变更学费的差额应增加给教学中心，同时销售中心的现金收入做相应减少
+  参数描述:
+  功能描述:月报现金收入
+ */
+--校验入参是否为月末最后一天
+if MDATE = add_months(trunc(MDATE,'mm'),1)-1 then
+--删除指定月数据
+delete from rpt_mon_cash_2019 where  RPT_DATE>=trunc(MDATE,'mm') and RPT_DATE<trunc(MDATE)+1 and rpt_version = '2020V1';
+commit;
+
+--插入指定月数据
+
+
+if (to_number(TO_CHAR(mdate, 'yyyy'))=2020 and to_number(TO_CHAR(mdate, 'MM')) in (1,2)) then
+--这里为2020年1、2月份现金明细取值逻辑
+--收款表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment,pay_type, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,STU_RPT_DATE,TEAM_CENTER_ID,TEAM_CENTER_NAME,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select parent_id from mdm_center where id=TEAM_CENTER_ID)
+           else area_id end as area_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select name from mdm_center where id=(select parent_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+           else area_name end as area_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select city_id from mdm_center where id=TEAM_CENTER_ID)
+           else city_id end as city_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select name from mdm_city where id=(select city_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+           else city_name end as city_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_ID
+           else center_id end as center_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_name
+           else center_name end as center_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.TEAM_CENTER_ID  and rownum=1)
+           else (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) end as center_type,
+      rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      case when  payment in ('289','314','294','308','306') then '贷款后期到账'
+           when payment not in ('289','314','294','308','306') and rpt_date < TEDU_GRADUATION_DATE  then '在读期还款'
+           when payment not in ('289','314','294','308','306') and rpt_date >= TEDU_GRADUATION_DATE  then '毕业后还款'
+           else '' end as cash_type,
+      rpt_money, rank_money, used,payment, pay_type,own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,STU_RPT_DATE,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_ID
+           else TEAM_CENTER_ID end as TEAM_CENTER_ID,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_name
+           else TEAM_CENTER_name end as TEAM_CENTER_name
+      ,INFO_SOURCE
+      ,INFO_CHANNEL
+      ,school_name
+
+from(
+
+  select
+    (select create_area_id from stu_info where id=mm.stu_id) as area_id
+    ,(select name from mdm_center where id=(select create_area_id from stu_info where id=mm.stu_id)) as area_name
+    ,(select create_city_id from stu_info where id=mm.stu_id) as city_id
+    ,(select name from mdm_city where id=(select create_city_id from stu_info where id=mm.stu_id)) as city_name
+    ,(select create_center_id from stu_info where id=mm.stu_id) as center_id
+    ,(select name from mdm_center where id=(select create_center_id from stu_info where id=mm.stu_id)) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=(select create_center_id from stu_info where id=mm.stu_id) and rownum=1) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1)   from stu_info where id=mm.stu_id) as stu_report_date
+    ,nvl(mm.adjust_money,0) as rpt_money, nvl(mm.adjust_money,0) as rank_money, mm.payment as payment
+  ,(select name from mdm_dic_option where dic_code = 'cont_c_info_002' and code = (select payment from cont_c_info where id = mm.cont_c_id)) as pay_type
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select REPORT_DATE  from stu_info  where id=mm.stu_id ) as  STU_RPT_DATE
+    ,(select TEAM_CENTER_ID from stu_info where id=mm.stu_id) as TEAM_CENTER_ID
+    ,(select TEAM_CENTER_NAME from stu_info where id=mm.stu_id) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from cont_c_pay mm
+  where   app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and (mm.rcw_type is null or rcw_type=0)
+)tt  where  rpt_date>stu_report_date;
+
+commit;
+
+
+/**
+证书收入（因成人双记，故单独摘出写）
+*/
+--学员缴费表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,TEAM_CENTER_ID,TEAM_CENTER_NAME,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select parent_id from mdm_center where id=TEAM_CENTER_ID)
+           else area_id end as area_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select name from mdm_center where id=(select parent_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+           else area_name end as area_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select city_id from mdm_center where id=TEAM_CENTER_ID)
+           else city_id end as city_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (select name from mdm_city where id=(select city_id from mdm_center m where m.id=tt.TEAM_CENTER_ID))
+           else city_name end as city_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_ID
+           else center_id end as center_id,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then TEAM_CENTER_name
+           else center_name end as center_name,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id
+           then (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.TEAM_CENTER_ID  and rownum=1)
+           else (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) end as center_type
+      ,rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      '证书收入' as cash_type,
+      rpt_money, rank_money, used,payment, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_ID
+           else TEAM_CENTER_ID end as TEAM_CENTER_ID,
+      case when TEAM_CENTER_ID is not null and TEAM_CENTER_ID!=center_id then CENTER_name
+           else TEAM_CENTER_name end as TEAM_CENTER_name
+      ,INFO_SOURCE,INFO_CHANNEL,school_name
+
+from(
+
+  select
+    area_id as area_id
+    ,(select name from mdm_center where id=area_id) as area_name
+    ,city_id as city_id
+    ,(select name from mdm_city where id=city_id) as city_name
+    ,center_id as center_id,center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1)   from stu_info where id=mm.stu_id) as stu_report_date
+    ,nvl(mm.adjust_money,0) as rpt_money, nvl(mm.adjust_money,0) as rank_money, mm.payment as payment
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select TEAM_CENTER_ID from va_cert where id=mm.cert_id) as TEAM_CENTER_ID
+    ,(select TEAM_CENTER_NAME from va_cert where id=mm.cert_id) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from va_stu_pay mm
+  where  used in ('261') and app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and rect_pay not in (2,3)  and (mm.rcw_type is null or rcw_type=0)
+)tt;
+
+commit;
+
+else
+
+--3月及以后取值 不取值联合招生中心 ，以销售中心为中心
+--收款表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment,pay_type, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,STU_RPT_DATE,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+       (select parent_id from mdm_center where id=center_id) as area_id,
+       (select name from mdm_center where id=(select parent_id from mdm_center m where m.id=tt.center_id)) as area_name,
+       (select city_id from mdm_center where id=center_id) as city_id,
+       (select name from mdm_city where id=(select city_id from mdm_center m where m.id=tt.center_id)) as city_name,
+       center_id, center_name,
+    (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) as center_type,
+      rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      case when  payment in ('289','314','294','308','306') then '贷款后期到账'
+           when payment not in ('289','314','294','308','306') and rpt_date < TEDU_GRADUATION_DATE  then '在读期还款'
+           when payment not in ('289','314','294','308','306') and rpt_date >= TEDU_GRADUATION_DATE  then '毕业后还款'
+           else '' end as cash_type,
+      rpt_money, rank_money, used,payment, pay_type,own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,STU_RPT_DATE
+      ,INFO_SOURCE
+      ,INFO_CHANNEL
+      ,school_name
+
+from(
+
+  select
+    (select create_area_id from stu_info where id=mm.stu_id) as area_id
+    ,(select name from mdm_center where id=(select create_area_id from stu_info where id=mm.stu_id)) as area_name
+    ,(select create_city_id from stu_info where id=mm.stu_id) as city_id
+    ,(select name from mdm_city where id=(select create_city_id from stu_info where id=mm.stu_id)) as city_name
+    ,(select create_center_id from stu_info where id=mm.stu_id) as center_id
+    ,(select name from mdm_center where id=(select create_center_id from stu_info where id=mm.stu_id)) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=(select create_center_id from stu_info where id=mm.stu_id) and rownum=1) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1)   from stu_info where id=mm.stu_id) as stu_report_date
+    ,nvl(mm.adjust_money,0) as rpt_money, nvl(mm.adjust_money,0) as rank_money, mm.payment as payment
+  ,(select name from mdm_dic_option where dic_code = 'cont_c_info_002' and code = (select payment from cont_c_info where id = mm.cont_c_id)) as pay_type
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select REPORT_DATE  from stu_info  where id=mm.stu_id ) as  STU_RPT_DATE
+    ,(select TEAM_CENTER_ID from stu_info where id=mm.stu_id) as TEAM_CENTER_ID
+    ,(select TEAM_CENTER_NAME from stu_info where id=mm.stu_id) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from cont_c_pay mm
+  where   app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and (mm.rcw_type is null or rcw_type=0)
+)tt  where  rpt_date>stu_report_date;
+
+commit;
+
+
+/**
+证书收入
+*/
+--学员缴费表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+      (select parent_id from mdm_center where id=center_id) as area_id,
+       (select name from mdm_center where id=(select parent_id from mdm_center m where m.id=tt.center_id)) as area_name,
+       (select city_id from mdm_center where id=center_id) as city_id,
+       (select name from mdm_city where id=(select city_id from mdm_center m where m.id=tt.center_id)) as city_name,
+       center_id, center_name,
+    (SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=tt.center_id  and rownum=1) as center_type
+      ,rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      '证书收入' as cash_type,
+      rpt_money, rank_money, used,payment, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version
+      ,INFO_SOURCE,INFO_CHANNEL,school_name
+
+from(
+
+  select
+    area_id as area_id
+    ,(select name from mdm_center where id=area_id) as area_name
+    ,city_id as city_id
+    ,(select name from mdm_city where id=city_id) as city_name
+    ,center_id as center_id,center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1)   from stu_info where id=mm.stu_id) as stu_report_date
+    ,nvl(mm.adjust_money,0) as rpt_money, nvl(mm.adjust_money,0) as rank_money, mm.payment as payment
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select TEAM_CENTER_ID from va_cert where id=mm.cert_id) as TEAM_CENTER_ID
+    ,(select TEAM_CENTER_NAME from va_cert where id=mm.cert_id) as TEAM_CENTER_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from va_stu_pay mm
+  where  used in ('261') and app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and rect_pay not in (2,3)  and (mm.rcw_type is null or rcw_type=0)
+)tt;
+
+commit;
+
+end if;
+
+/**
+政府补贴、其他收入
+*/
+--学员缴费表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time, rpt_version,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      case when used in ('272') then '政府补贴'
+           when used in ('2','3','260','279') then '其他收入'
+           else '' end as cash_type,
+      rpt_money, rank_money, used,payment, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,INFO_SOURCE,INFO_CHANNEL,school_name
+
+from(
+
+  select
+    area_id as area_id
+    ,(select name from mdm_center where id=area_id) as area_name
+    ,city_id as city_id
+    ,(select name from mdm_city where id=city_id) as city_name
+    ,center_id as center_id,center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1)   from stu_info where id=mm.stu_id) as stu_report_date
+    ,nvl(mm.adjust_money,0) as rpt_money, nvl(mm.adjust_money,0) as rank_money, mm.payment as payment
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from va_stu_pay mm
+  where used not in ('261') and  app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and rect_pay not in (2,3) and (mm.rcw_type is null or rcw_type=0)
+);
+
+commit;
+
+
+--其它缴费表
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  cash_type, rpt_money, used,payment, create_time, rpt_version)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+      case when  used in ('261') then '证书收入'
+           when used in ('272') then '政府补贴'
+           when used in ('2','3','260','279') then '其他收入'
+           else '' end as cash_type,
+      rpt_money, used,payment,sysdate as create_time, '2020V1' as rpt_version
+
+from(
+
+  select
+    mm.area_id as area_id,(select name from mdm_center where id=mm.area_id) as area_name,mm.city_id as city_id
+    ,(select name from mdm_city where id=mm.city_id) as city_name
+    ,mm.center_id as center_id,mm.center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.center_id and rownum=1) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, id as stu_id, mm.stu_name as stu_name
+    ,'' as source_stu
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,nvl(mm.adjust_money,0) as rpt_money, mm.payment as payment
+
+  from va_other_pay mm
+  where  app_state=11 and  report_date >= trunc(MDATE,'mm')  and report_date < trunc(MDATE)+1 and rect_pay not in (2,3) and (mm.rcw_type is null or rcw_type=0)
+);
+
+commit;
+
+
+
+--2019/8/4 合同变更改版
+--改版内容：教学中心变更学费的差额应增加给教学中心，同时销售中心的现金收入做相应减少
+--变更模式：due_fee=0 月报月销售-变更差额  教学+变更差额  due_fee>0 月报月次月销售-变更差额  教学+变更差额
+
+--due_fee=0 销售-变更差额
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,STU_RPT_DATE,remark,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+    area_id as area_id
+    ,(select name from mdm_center where id=area_id) as area_name
+    ,city_id as city_id
+    ,(select name from mdm_city where id=city_id) as city_name
+    ,center_id as center_id,center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id) as center_type
+      ,rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      '在读期还款' as cash_type,
+      rpt_money, rank_money,255 as used,payment, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,STU_RPT_DATE
+      ,'合同变更差额' as remark,INFO_SOURCE,INFO_CHANNEL,school_name
+
+from(
+
+  select
+    (select create_area_id from stu_info where id=mm.stu_id) as area_id
+    ,(select name from mdm_center where id=(select create_area_id from stu_info where id=mm.stu_id)) as area_name
+    ,(select create_city_id from stu_info where id=mm.stu_id) as city_id
+    ,(select name from mdm_city where id=(select create_city_id from stu_info where id=mm.stu_id)) as city_name
+    ,(select create_center_id from stu_info where id=mm.stu_id) as center_id
+    ,(select name from mdm_center where id=(select create_center_id from stu_info where id=mm.stu_id)) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=(select create_center_id from stu_info where id=mm.stu_id) and rownum=1) as center_type
+    ,trunc(MDATE) as rpt_date , mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1) from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1) from stu_info where id=mm.stu_id) as stu_report_date
+    ,0-rpt_money as rpt_money , 0 as rank_money,mm.payment
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select REPORT_DATE  from stu_info  where id=mm.stu_id ) as  STU_RPT_DATE
+    ,(select sum(nvl(due_fee,0)) from cont_c_info where  HT_SUB_TYPE = '1001' and stu_id = mm.stu_id and app_state=11 ) due_fee
+    ,mm.center_id teach_center_id
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from cont_c_info mm
+  where   ht_sub_type='1002'
+          and rpt_money>0
+          and app_state=11
+          and app_DATE between trunc(MDATE,'MM') and add_months(trunc(MDATE,'MM'),1)-1
+          and exists (select 1 from cont_c_pay c where stu_id=mm.stu_id and app_state=11 and c.report_date between trunc(MDATE,'MM') and add_months(trunc(MDATE,'MM'),1)-1)
+)tt  where due_fee=0 and center_id != teach_center_id;
+
+commit;
+
+
+--due_fee=0 教学+变更差额
+insert into rpt_mon_cash_2019
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, cash_type, rpt_money, rank_money, used,
+  payment, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email, create_time,
+  rpt_version,STU_RPT_DATE,remark,INFO_SOURCE,INFO_CHANNEL,school_name)
+
+select
+    area_id as area_id
+    ,(select name from mdm_center where id=area_id) as area_name
+    ,city_id as city_id
+    ,(select name from mdm_city where id=city_id) as city_name
+    ,center_id as center_id,center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=center_id) as center_type
+      ,rpt_date, stu_id, stu_name,
+      source_stu, series_class_id, series_class_name, class_direction,
+      '在读期还款' as cash_type,
+      rpt_money, rank_money,255 as used,payment, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version,STU_RPT_DATE
+      ,'合同变更差额' as remark,INFO_SOURCE,INFO_CHANNEL,school_name
+from(
+
+  select
+    mm.area_id as area_id, mm.area_name as area_name, mm.city_id as city_id
+    ,(select name from mdm_city where id=mm.city_id) as city_name
+    ,mm.center_id as center_id, mm.center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.center_id and rownum=1) as center_type
+    ,trunc(MDATE) as rpt_date , mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+    ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1) from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    ,(select add_months( trunc( report_date,'mm') ,1) from stu_info where id=mm.stu_id) as stu_report_date
+    ,rpt_money as rpt_money , 0 as rank_money,mm.payment
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+    ,(select REPORT_DATE  from stu_info  where id=mm.stu_id ) as  STU_RPT_DATE
+    ,(select sum(nvl(due_fee,0)) from cont_c_info where  HT_SUB_TYPE = '1001' and stu_id = mm.stu_id and app_state=11 ) due_fee
+    ,(select create_center_id from stu_info where id=mm.stu_id) create_center_id
+    ,(select name from mdm_dic_option where dic_code='media_channel_001' and code=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_SOURCE
+    ,(select t.media from MEDIA_CHANNEL t where t.media_type=(select INFO_SOURCE from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)) and state=1 and id=(select INFO_CHANNEL from sale_info s where s.id=(select stu.information_id from stu_info stu where stu.id=mm.stu_id)))INFO_CHANNEL
+    ,(select school_name from stu_info where id=mm.stu_id) school_name
+  from cont_c_info mm
+  where   ht_sub_type='1002'
+          and rpt_money>0
+          and app_state=11
+          and app_DATE between trunc(MDATE,'MM') and add_months(trunc(MDATE,'MM'),1)-1
+          and exists (select 1 from cont_c_pay c where stu_id=mm.stu_id and app_state=11 and c.report_date between trunc(MDATE,'MM') and add_months(trunc(MDATE,'MM'),1)-1)
+)tt  where due_fee=0 and center_id != create_center_id;
+
+commit;
+
+/**
+首都区域 张素芬老师将2020-02-10的12笔缴费(属于2019年的收入) 从2月月报中的其他收入中去除（以取负值的方式实现 调整金额13502088.96）
+修改时间:2020-06-19
+*/
+
+--只有2月份的执行以下
+if (to_number(TO_CHAR(mdate, 'yyyy'))=2020 and to_number(TO_CHAR(mdate, 'MM'))=2) then
+
+  insert into rpt_mon_cash_2019
+    (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+    cash_type, rpt_money, used,payment, create_time, rpt_version)
+
+  select
+    area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+       '其他收入'  as cash_type,
+       rpt_money, used,payment,sysdate as create_time, '2020V1' as rpt_version
+
+  from(
+
+    select
+      mm.area_id as area_id,(select name from mdm_center where id=mm.area_id) as area_name,mm.city_id as city_id
+    ,(select name from mdm_city where id=mm.city_id) as city_name
+    ,mm.center_id as center_id,mm.center_name as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=mm.center_id and rownum=1) as center_type
+    ,add_months(trunc(mm.report_date,'mm'),1)-1 as rpt_date, id as stu_id, mm.stu_name as stu_name
+    ,'' as source_stu
+    ,used
+    ,(select add_months( trunc( nvl( TEDU_GRADUATION_DATE,MDATE) ,'mm') ,1)  from stu_info where id=mm.stu_id) as TEDU_GRADUATION_DATE
+    --取金额的负值
+  ,0-nvl(mm.adjust_money,0)  as rpt_money, mm.payment as payment
+
+    from va_other_pay mm
+    where app_state=11 and  report_date >= trunc(MDATE,'mm')
+  and report_date < trunc(MDATE)+1
+  and rect_pay not in (2,3)
+  and (mm.rcw_type is null or rcw_type=0)
+    and rect_code in(
+      'BJZGC2020021000000172',
+      'BJZGC2020021000000171',
+      'BJZGC2020021000000169',
+      'BJZGC2020021000000168',
+      'BJZGC2020021000000164',
+      'BJZGC2020021000000165',
+      'BJZGC2020021000000167',
+      'BJZGC2020021000000166',
+      'BJZGC2020021000000163',
+      'BJZGC2020021000000162',
+      'BJZGC2020021000000161',
+      'BJZGC2020021000000160' )
+  );
+
+  commit;
+
+end if;
+
+update rpt_mon_cash_2019
+set area_id=(select parent_id from mdm_center where id=center_id)
+where area_id is null;
+
+commit;
+
+update rpt_mon_cash_2019
+set area_name=(select name from mdm_center where id=area_id)
+where area_name is null;
+
+commit;
+
+
+end if;
+
+END;

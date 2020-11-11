@@ -1,0 +1,69 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_run_k12rev_proc_2020(MDATE IN DATE DEFAULT sysdate)
+is
+
+BEGIN
+ /*
+  作者：qc
+  创建时间：2020-05-11
+  修改人：
+  修改时间：
+  参数描述:
+  功能描述:转化童程插入数据
+  修改内容:2020-006-02 增加帮招复制标识(用于集团合并K12条件)(作为集团合并查询K12数据条件用) offline_db_type
+ */
+
+--校验入参是否为月末最后一天
+if MDATE = add_months(trunc(MDATE,'mm'),1)-1 then
+
+
+--插入指定月数据
+
+insert into rpt_mon_run
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, rpt_year, rpt_month, rpt_type,
+  rpt_row, rpt_col, rpt_value, rpt_row_type, rpt_row_show, create_time, rpt_version, rpt_row_code, rpt_row_name, dblclick,
+   dblclick_center_id, dblclick_row,dbclick_type,offline_db_type)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+       add_months(trunc(MDATE,'mm'),1)-1 as rpt_date,rpt_year, rpt_month,
+       rpt_type, rpt_row,rpt_col, rpt_value, rpt_row_type, rpt_row_show,sysdate as create_time,
+       rpt_version, rpt_row_code,rpt_row_name,dblclick,dblclick_center_id,dblclick_row,dbclick_type,offline_db_type
+
+from(
+
+    select (select name from mdm_center where id=(select parent_id from mdm_center m where m.code=t.center_code)) as area_name
+           ,(select parent_id from mdm_center where code=center_code) as area_id
+           ,(select id from mdm_center where code=center_code) as center_id
+           ,(select name from mdm_center where code=center_code) as center_name
+           ,(select city_id from mdm_center where code=center_code) as city_id
+           ,(select name from mdm_city where id=(select city_id from mdm_center m where m.code=t.center_code)) as city_name
+           ,center_code, center_type, rpt_date, rpt_year, rpt_month, rpt_type, rpt_row, rpt_col, rpt_value
+           ,rpt_row_type, rpt_row_show, rpt_row_code, rpt_row_name, dblclick
+           ,(select id from mdm_center where code=to_char(dblclick_center_code)) as dblclick_center_id
+           ,dblclick_center_code, dblclick_row, create_time, rpt_version,dbclick_type,offline_db_type
+
+     from rpt_mon_run_k12rev t
+     where rpt_year = to_number(to_char(MDATE,'yyyy'))
+           and rpt_month = to_number(to_char(MDATE,'MM'))
+       and rpt_version = '2020V1'
+           and center_code != 0
+
+     union all
+
+     select area_name, area_id,0 as center_id, center_name,city_id, city_name
+           ,center_code, center_type, rpt_date, rpt_year, rpt_month, rpt_type, rpt_row, rpt_col, rpt_value
+           ,rpt_row_type, rpt_row_show, rpt_row_code, rpt_row_name, dblclick, dblclick_center_id
+           ,dblclick_center_code, dblclick_row, create_time, rpt_version,dbclick_type,offline_db_type
+
+     from rpt_mon_run_k12rev t
+     where rpt_year = to_number(to_char(MDATE,'yyyy'))
+           and rpt_month = to_number(to_char(MDATE,'MM'))
+       and rpt_version = '2020V1'
+           and center_code = 0
+
+)where center_id is not null;
+commit;
+
+
+end if;
+
+END;

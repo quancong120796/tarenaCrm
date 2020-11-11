@@ -1,0 +1,184 @@
+CREATE OR REPLACE PROCEDURE rpt_mon_dis_proc_2020(MDATE IN DATE DEFAULT sysdate)
+is
+
+BEGIN
+ /*
+  作者：qc
+  创建时间：2020-05-11
+  修改时间：
+  修改内容:调整版本为'2020V1' 删除增加版本条件
+  参数描述:
+  功能描述:月报学员优惠
+  修改内容:2020-06-12 confirm_money 字段rpt_version 条件调整，取消CADOT单独处理
+ */
+--校验入参是否为月末最后一天
+if MDATE = add_months(trunc(MDATE,'mm'),1)-1 then
+--删除指定月数据
+delete from rpt_mon_dis where  RPT_DATE>=trunc(MDATE,'mm') and RPT_DATE<trunc(MDATE)+1 and rpt_version = '2020V1';
+commit;
+
+--插入指定月数据
+/**
+当前月报范围内数据
+*/
+insert into rpt_mon_dis
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, rpt_discount_fee, rpt_discount_type, app_date,
+  discount_fee, discount_type, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email,
+  create_time, rpt_version)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+      case when app_date<add_months(trunc(report_date,'mm'),1)
+                  then add_months(trunc(report_date,'mm'),1)-1
+                  else add_months(trunc(app_date,'mm'),1)-1 end as rpt_date,
+      stu_id, stu_name, source_stu, series_class_id, series_class_name
+    ,class_direction
+      ,case  when source_stu='1031'then discount_fee
+             else case when nvl(sum_money,0)>nvl(one_fee,0)-nvl(confirm_money,0)
+                       then nvl(sum_money,0)-(nvl(one_fee,0)-nvl(confirm_money,0))
+                       else 0 end
+             end as rpt_discount_fee
+      ,case when app_date<add_months(trunc(report_date,'mm'),1)
+                  then '1'
+                  else '2' end as rpt_discount_type
+      ,app_date,discount_fee, discount_type, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version
+
+
+from (
+  select
+    (select create_area_id from stu_info where id=mm.stu_id) as area_id
+    ,(select name from mdm_center where id=(select create_area_id from stu_info where id=mm.stu_id)) as area_name
+    ,(select create_city_id from stu_info where id=mm.stu_id) as city_id
+    ,(select name from mdm_city where id=(select create_city_id from stu_info where id=mm.stu_id)) as city_name
+    ,(select create_center_id from stu_info where id=mm.stu_id) as center_id
+    ,(select name from mdm_center where id=(select create_center_id from stu_info where id=mm.stu_id)) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=(select create_center_id from stu_info where id=mm.stu_id) and rownum=1) as center_type
+    ,mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+  ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    --累计优惠金额
+    ,(select sum(nvl(money,0)) from cont_c_discount where stu_id=mm.stu_id and app_state='11' and app_date <  mm.app_date ) as sum_money
+    --一次性学费总值
+    ,(select sum(nvl(ACTUAL_ONCE_MONEY ,nvl(RPT_MONEY,0))) from cont_c_info  where HT_SUB_TYPE='1001' and stu_id=mm.stu_id )  as one_fee
+    --业绩确认金额(这里加上2020年一月的条件主要为区分两个版本，否则19年的优惠无法取值)
+     ,(select sum(nvl(fee,0)) from rpt_mon_stu where stu_id=mm.stu_id and rpt_version = (case when to_char(MDATE,'mm')= '01' and to_char(MDATE,'yyyy')= '2020' then '2019V1' else '2020V1' end)) as confirm_money
+    ,(select add_months(trunc(report_date,'mm'),1)-1 from stu_info where id=mm.stu_id) as report_date
+    ,mm.app_date as app_date, mm.money as discount_fee, mm.DISCOUNT_STYLE as discount_type
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+  from cont_c_discount mm
+  where mm.app_state='11'
+      and app_date >= trunc(MDATE,'mm')
+      and app_date < trunc(MDATE)+1
+) where  report_date is not null;
+
+commit;
+
+
+/**
+当前月报月份1号之前审批，但进入当前月月报数据
+*/
+
+insert into rpt_mon_dis
+  (area_id, area_name, city_id, city_name, center_id, center_name, center_type, rpt_date, stu_id, stu_name,
+  source_stu, series_class_id, series_class_name, class_direction, rpt_discount_fee, rpt_discount_type, app_date,
+  discount_fee, discount_type, own_id, own_name, own_email, share_own_id, share_own_name, share_own_email,
+  create_time, rpt_version)
+
+select area_id, area_name, city_id, city_name, center_id, center_name, center_type,
+      case when app_date<add_months(trunc(report_date,'mm'),1)
+                  then add_months(trunc(report_date,'mm'),1)-1
+                  else add_months(trunc(app_date,'mm'),1)-1 end as rpt_date,
+      stu_id, stu_name, source_stu, series_class_id, series_class_name
+    ,class_direction
+      ,case  when source_stu='1031'then discount_fee
+             else case when nvl(sum_money,0)>nvl(one_fee,0)-nvl(confirm_money,0)
+                       then nvl(sum_money,0)-(nvl(one_fee,0)-nvl(confirm_money,0))
+                       else 0 end
+             end as rpt_discount_fee
+      ,case when app_date<add_months(trunc(report_date,'mm'),1)
+                  then '1'
+                  else '2' end as rpt_discount_type
+      ,app_date,discount_fee, discount_type, own_id, own_name
+      ,case when (select login_name from extend_user where id=own_id ) is not null
+            then (select login_name from extend_user where id=own_id )|| '@tedu.cn'
+            else null
+       end as own_email
+      , share_own_id, share_own_name
+      ,case when (select login_name from extend_user where id=share_own_id ) is not null
+            then (select login_name from extend_user where id=share_own_id )|| '@tedu.cn'
+            else null
+       end as share_own_email
+      ,sysdate as create_time, '2020V1' as rpt_version
+
+from (
+  select
+    (select create_area_id from stu_info where id=mm.stu_id) as area_id
+    ,(select name from mdm_center where id=(select create_area_id from stu_info where id=mm.stu_id)) as area_name
+    ,(select create_city_id from stu_info where id=mm.stu_id) as city_id
+    ,(select name from mdm_city where id=(select create_city_id from stu_info where id=mm.stu_id)) as city_name
+    ,(select create_center_id from stu_info where id=mm.stu_id) as center_id
+    ,(select name from mdm_center where id=(select create_center_id from stu_info where id=mm.stu_id)) as center_name
+    ,(SELECT WORK_TYPE  FROM MDM_CENTER WHERE ID=(select create_center_id from stu_info where id=mm.stu_id) and rownum=1) as center_type
+    ,mm.stu_id as stu_id, mm.stu_name as stu_name
+    ,(select source_stu from stu_info where id=mm.stu_id) as source_stu
+    ,mm.series_class_id as series_class_id, mm.series_class_name series_class_name
+  ,(select course.short_name from mdm_course course where course.code=(select substr(proc_code,1,3) from ca_class where id=mm.series_class_id)) as class_direction
+    --累计优惠金额
+    ,(select sum(nvl(money,0)) from cont_c_discount where    stu_id=mm.stu_id and app_state='11' and app_date <  mm.app_date) as sum_money
+    --一次性学费总值
+    ,(select sum(nvl(ACTUAL_ONCE_MONEY ,nvl(RPT_MONEY,0)))  from cont_c_info  where HT_SUB_TYPE='1001' and stu_id=mm.stu_id ) as one_fee
+    --业绩确认金额(这里加上2020年一月的条件主要为区分两个版本，否则19年的优惠无法取值)
+     ,(select sum(nvl(fee,0)) from rpt_mon_stu where stu_id=mm.stu_id and rpt_version = (case when to_char(MDATE,'mm')= '01' and to_char(MDATE,'yyyy')= '2020' then '2019V1' else '2020V1' end)) as confirm_money
+    ,(select add_months(trunc(report_date,'mm'),1)-1 from stu_info where id=mm.stu_id) as report_date
+    ,mm.app_date as app_date, mm.money as discount_fee, mm.DISCOUNT_STYLE as discount_type
+    ,(select own_id from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_id
+    ,(select own_name from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as own_name
+    ,(select SHARE_OWN_ID from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_ID
+    ,(select SHARE_OWN_NAME from cont_c_info where HT_SUB_TYPE = '1001' and HT_TYPE = '1' and stu_id = mm.stu_id and APP_STATE='11' and rownum=1) as SHARE_OWN_NAME
+  from cont_c_discount mm
+  where mm.app_state='11'
+        and app_date <trunc(MDATE,'mm')
+        and stu_id in(select id from stu_info where report_date >= trunc(MDATE,'mm') and report_date < trunc(MDATE)+1)
+) where  report_date is not null;
+
+commit;
+
+--删除渠道不满足月报优惠金额的数据
+
+delete from rpt_mon_dis where center_type=2 and (rpt_discount_fee is null or rpt_discount_fee=0);
+
+commit;
+
+
+update rpt_mon_dis
+set area_id=(select parent_id from mdm_center where id=center_id)
+where area_id is null;
+
+commit;
+
+update rpt_mon_dis
+set area_name=(select name from mdm_center where id=area_id)
+where area_name is null;
+
+commit;
+
+
+
+
+end if;
+
+END;
