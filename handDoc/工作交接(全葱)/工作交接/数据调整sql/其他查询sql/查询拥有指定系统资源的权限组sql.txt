@@ -1,0 +1,11 @@
+--查询拥有该资源权限的权限组信息  
+--根据权限组id查询详细的权限组信息
+select * from sys_permission_group where id in (
+       select PERMISSION_ID from sys_pgroup_resource where resource_id = (
+       select id from sys_resource 
+	   --资源管理中的资源编码条件
+	   where crm_code = 'JYYBZB'
+       )
+)
+  
+  

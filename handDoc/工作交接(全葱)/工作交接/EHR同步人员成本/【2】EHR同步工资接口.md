@@ -74,6 +74,6 @@
 - 可在"**月支出和人员成本**"功能查询同步到crm的工资社保公积金数
 - 时间条件选择当月月末最后一天，例 查询10月的工资数据:
 
-<img src="E:\需求\工作交接(全葱)\工作交接\文档附件\cutImages\月支出.png" alt="月支出" style="zoom:150%;" />
+<img src="..\文档附件\cutImages\月支出.png" alt="月支出" style="zoom:150%;" />
 
-<img src="E:\需求\工作交接(全葱)\工作交接\文档附件\cutImages\人员成本工资.png" alt="人员成本工资" style="zoom:150%;" />
+<img src="..\文档附件\cutImages\人员成本工资.png" alt="人员成本工资" style="zoom:150%;" />

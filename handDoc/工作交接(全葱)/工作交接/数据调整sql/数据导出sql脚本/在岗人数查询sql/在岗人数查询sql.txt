@@ -1,0 +1,11 @@
+--某月份在岗员工数导出查询
+select 
+center_code as 中心编码,
+code as 岗位编码,
+count as 人数,
+create_time as 创建时间,
+(select name from mdm_dic_option where dic_code = 'cost_other_001' and code = (case when to_number(s.code)<10 then concat(7000,s.code) else concat(700,s.code) end   ) )  as 运营职位分类,
+center_name as 中心名称
+
+from rpt_mon_staff s
+where trunc(create_time) = trunc(to_date('要导出的时间，例：2020年9月在岗员工数则为 2020/10/01','yyyy/mm/dd') )
